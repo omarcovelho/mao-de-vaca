@@ -19,7 +19,7 @@ Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O 
 | Princípio | Escolha |
 |-----------|---------|
 | **Dono do domínio** | Módulos em `src/server/` (NestJS) são a única fonte de verdade para regras de negócio, regimes, saldos de fatura e deduplicação |
-| **Papel da UI** | React em `src/ui/` renderiza snapshots da API e envia comandos — sem lógica de contabilização duplicada |
+| **Papel da UI** | React em `src/ui/` renderiza snapshots da API e envia comandos — sem lógica de contabilização duplicada. Direção visual: [docs/design/UI_REFERENCE.md](./design/UI_REFERENCE.md) |
 | **Formato do app** | Um único app web: NestJS hospeda a API (`/api/**`) e serve o build estático da SPA para o restante |
 | **Sem código compartilhado** | `server/` e `ui/` **não importam** tipos, DTOs ou utilitários um do outro; contratos vivem apenas na API HTTP |
 | **Cadastro primeiro** | Contas, cartões e categorias são **requisitos do domínio antes da importação**; lançamentos e faturas dependem de origens e categorias cadastradas |
