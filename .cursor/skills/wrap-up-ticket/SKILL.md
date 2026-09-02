@@ -1,9 +1,9 @@
 ---
 name: wrap-up-ticket
 description: >-
-  Verifies the workspace (lint, tests, builds) and commits local changes without
-  pushing. Use when the user asks to wrap up a ticket, fechar o ticket, finish
-  the ticket, or commit after checks pass.
+  Verifies the workspace (lint, tests, builds, audit) and commits local changes
+  without pushing. Use when the user asks to wrap up a ticket, fechar o ticket,
+  finish the ticket, or commit after checks pass.
 ---
 
 # Wrap Up Ticket
@@ -40,19 +40,33 @@ Do not commit secrets (`.env`, credentials, etc.). Warn and exclude them if pres
 
 ### 2. Run quality checks
 
+These are **pre-commit smoke checks**, not a substitute for GitHub CI (fresh OS, `npm ci`, empty Postgres, dependency-review). CI remains the merge gate.
+
 From the repo root, run **in order**. Stop on the first failure:
 
 ```bash
 npm run lint
 npm run test
 npm run build
+npm audit --audit-level=high
 ```
 
 If server/schema work is in the diff, also run:
 
 ```bash
 npx prisma validate
+npx prisma migrate status
 ```
+
+If migrate status shows pending migrations, apply before trusting `test:server`:
+
+```bash
+npx prisma migrate deploy
+```
+
+**Why audit locally:** the `security-audit` CI job fails the PR on high/critical advisories; catching that before push avoids a known red CI.
+
+**Prisma caveat:** local Postgres may already have migrations applied. CI uses a fresh DB and runs `migrate deploy` — do not remove that step from `.github/workflows/ci.yml` when editing workflows.
 
 Report pass/fail briefly. On failure: show the relevant error summary and **do not commit**.
 
@@ -85,6 +99,8 @@ Run `git status` after the commit. Tell the user:
 ## Anti-patterns
 
 - Pushing “to finish” the wrap-up
-- Committing with failing lint/test/build
+- Treating local checks as a full CI replacement
+- Committing with failing lint/test/build/audit
+- Skipping `npm audit --audit-level=high` when `package-lock.json` changed
 - Skipping checks because the change “looks small”
 - Opening a PR as part of wrap-up
