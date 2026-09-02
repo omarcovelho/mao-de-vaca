@@ -1,7 +1,7 @@
 # Mão de Vaca — Arquitetura do MVP
 
 **Status:** Rascunho para planejamento de implementação  
-**Última atualização:** 2026-09-01  
+**Última atualização:** 2026-09-02  
 **Fonte de verdade do produto:** [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD)
 
 Este documento descreve *como* o MVP é construído em alto nível. Histórias de usuário, épicos e tarefas devem rastrear até aqui e até a definição de produto (especialmente §3, §5 e §6).
@@ -10,7 +10,7 @@ Este documento descreve *como* o MVP é construído em alto nível. Histórias d
 
 ## 1. Propósito
 
-Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O usuário **primeiro cadastra contas e cartões**; em seguida importa extratos e faturas em CSV (pré-categorizados externamente), vinculados a essas origens. O diferencial central é permitir enxergar os gastos sob **dois regimes simultâneos** — competência e caixa — com fatura de cartão modelada como **passivo**, pagamentos de fatura como **transferências** (sem contagem duplicada) e entrada de dados exclusivamente pela **interface web**.
+Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O usuário **primeiro cadastra contas, cartões e categorias**; em seguida importa extratos e faturas em CSV (pré-categorizados externamente), vinculados a essas origens. O diferencial central é permitir enxergar os gastos sob **dois regimes simultâneos** — competência e caixa — com fatura de cartão modelada como **passivo**, pagamentos de fatura como **transferências** (sem contagem duplicada) e entrada de dados exclusivamente pela **interface web**.
 
 ---
 
@@ -22,8 +22,8 @@ Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O 
 | **Papel da UI** | React em `src/ui/` renderiza snapshots da API e envia comandos — sem lógica de contabilização duplicada |
 | **Formato do app** | Um único app web: NestJS hospeda a API (`/api/**`) e serve o build estático da SPA para o restante |
 | **Sem código compartilhado** | `server/` e `ui/` **não importam** tipos, DTOs ou utilitários um do outro; contratos vivem apenas na API HTTP |
-| **Cadastro primeiro** | Contas e cartões são o **primeiro requisito do domínio**; importação, lançamentos e faturas dependem de origens cadastradas |
-| **Setup obrigatório** | Após login, usuário sem contas/cartões é orientado ao cadastro antes de qualquer outra operação de dados |
+| **Cadastro primeiro** | Contas, cartões e categorias são **requisitos do domínio antes da importação**; lançamentos e faturas dependem de origens e categorias cadastradas |
+| **Setup obrigatório** | Após login, usuário sem contas/cartões é orientado ao cadastro antes de qualquer outra operação de dados; categorias são recomendadas no onboarding mas não bloqueiam importação |
 | **Modularidade futura** | `src/server/` e `src/ui/` são extraíveis como apps independentes; módulos espelhados por domínio (`auth`, `accounts`, `import`, …) dentro de cada camada |
 | **Multitenant** | Coluna `userId` em todas as entidades desde o MVP; um único usuário fixo provisionado via env/seed |
 | **Importação** | **Única via interface web**, após cadastro de origens; modos transações (Conta) e fatura (Cartão + Fatura); parser selecionável (padrão no MVP) |
@@ -38,6 +38,7 @@ Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O 
 flowchart TB
   subgraph browser [Navegador]
     AccountsUI[Cadastro Contas/Cartões]
+    CategoriesUI[Cadastro Categorias]
     ImportUI[Tela de Importação]
     UI[React SPA]
   end
@@ -52,6 +53,7 @@ flowchart TB
   CSV[Arquivos CSV externos]
 
   AccountsUI -->|"/api/* → JSON"| Router
+  CategoriesUI -->|"/api/* → JSON"| Router
   ImportUI -->|upload multipart| Router
   UI -->|"/api/* → JSON"| Router
   UI -->|"/* → HTML/JS"| Router
@@ -82,7 +84,8 @@ mao-de-vaca/
       modules/
         auth/                     # Controller, service, guard, DTOs
         accounts/                 # CRUD Conta + Cartão (primeiro módulo de domínio)
-        import/                   # Upload multipart, parsers, modelo canônico
+        categories/               # CRUD Categoria (antes da importação)
+        import/                   # Upload multipart, parsers, modelo canônico, mapeamento de categorias
         transactions/
         invoices/
         parent-purchases/
@@ -94,6 +97,7 @@ mao-de-vaca/
       modules/
         auth/
         accounts/                 # Cadastro contas/cartões, onboarding
+        categories/               # Cadastro categorias, sugestão no onboarding
         import/
         transactions/
         invoices/
@@ -108,13 +112,14 @@ mao-de-vaca/
 
 ### Espelhamento de módulos
 
-Cada domínio (`auth`, `accounts`, `import`, `transactions`, `invoices`, `parent-purchases`, `reports`) existe em **ambas** as camadas com o mesmo nome. O nome alinha responsabilidades entre server e UI; não há imports cruzados.
+Cada domínio (`auth`, `accounts`, `categories`, `import`, `transactions`, `invoices`, `parent-purchases`, `reports`) existe em **ambas** as camadas com o mesmo nome. O nome alinha responsabilidades entre server e UI; não há imports cruzados.
 
 | Módulo | `server/modules/` | `ui/modules/` |
 |--------|-------------------|---------------|
 | **auth** | Login, guard JWT, contexto de tenant | Página de login, proteção de rotas |
 | **accounts** | CRUD Conta + Cartão, `setup/status` | Cadastro, listagem, onboarding pós-login |
-| **import** | Upload, parsers, deduplicação, `ImportBatch` | Formulário por modo, histórico, resumo |
+| **categories** | CRUD Categoria; unicidade de nome por `userId` | Listagem, formulário, desativação |
+| **import** | Preview/confirm, parsers, deduplicação, mapeamento de categorias, `ImportBatch` | Formulário por modo, pré-visualização com mapeamento, histórico, resumo |
 | **transactions** | CRUD, tipos, regimes, filtros | Tabela filtrável de lançamentos |
 | **invoices** | Faturas, saldo/status derivados, vínculo pagamento | Lista/detalhe de faturas, UI de vínculo manual |
 | **parent-purchases** | Agregado informacional, vínculo parcela↔pai | UI de agrupamento de parcelas |
@@ -133,21 +138,25 @@ Cada domínio (`auth`, `accounts`, `import`, `transactions`, `invoices`, `parent
 flowchart LR
   subgraph uiLayer [src/ui]
     UIMod0[modules/accounts]
+    UIModCat[modules/categories]
     UIMod1[modules/auth]
     UIMod2[modules/import]
     UIShell[app + router]
   end
   subgraph serverLayer [src/server]
     SrvMod0[modules/accounts]
+    SrvModCat[modules/categories]
     SrvMod1[modules/auth]
     SrvMod2[modules/import]
     SrvMain[main.ts]
   end
   UIMod2 -->|"HTTP /api/**"| SrvMod2
   UIShell --> UIMod0
+  UIShell --> UIModCat
   UIShell --> UIMod1
   UIShell --> UIMod2
   SrvMain --> SrvMod0
+  SrvMain --> SrvModCat
   SrvMain --> SrvMod1
   SrvMain --> SrvMod2
 ```
@@ -174,7 +183,8 @@ flowchart LR
 | **User** | PostgreSQL | Tenant/dono dos dados; único usuário seedado no MVP (`AUTH_*` env vars) |
 | **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `label`, `institution`, `active` |
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `label`, `institution`, `active` |
-| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `category`, `accountId` **ou** `cardId`, `dedupKey` |
+| **Category** (`Categoria`) | PostgreSQL | `id`, `userId`, `name` (único por usuário), `active` |
+| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`, `dedupKey` |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** |
 | **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
 | **ParentPurchase** | PostgreSQL | Agregado informacional; não entra em somas; parcelas vinculadas manualmente |
@@ -196,6 +206,7 @@ flowchart LR
 | **Pré-requisito de importação** | Conta ou cartão cadastrado obrigatório; rejeição sem origem válida (RN-08) |
 | **Origens desativadas** | Não aparecem em nova importação; histórico preservado (RN-09) |
 | **Fatura e cartão** | Fatura sempre vinculada a cartão cadastrado (RN-10) |
+| **Categoria e lançamento** | Todo lançamento referencia `categoryId` de categoria cadastrada (RN-11–13) |
 
 ### Regimes: competência vs caixa
 
@@ -234,7 +245,7 @@ Todo parser, independentemente de banco ou formato, produz lançamentos neste mo
 | `description` | Descrição do lançamento |
 | `amount` | Valor (negativo = despesa/estorno; positivo = receita) |
 | `type` | `expense` \| `income` \| `transfer` |
-| `category` | Categoria pré-atribuída no CSV |
+| `category` | Nome da categoria pré-atribuída no CSV (string do parser; resolvida para `categoryId` na confirmação) |
 | `accountId` | Conta cadastrada (modo transações) — mutuamente exclusivo com `cardId` |
 | `cardId` | Cartão cadastrado (modo fatura) |
 | `dedupKey` | Identificador estável para deduplicação |
@@ -246,34 +257,38 @@ Interface TypeScript em `src/server/modules/import/parsers/`; mapeamento para en
 
 ## 6. Fluxos principais
 
-### 6.0 Onboarding — cadastro de contas e cartões
+### 6.0 Onboarding — cadastro de contas, cartões e categorias
 
-O cadastro é o **primeiro fluxo de dados** após autenticação — anterior a importação, lançamentos e relatórios (RF-00d a RF-00h).
+O cadastro é o **primeiro fluxo de dados** após autenticação — anterior a importação, lançamentos e relatórios (RF-00d a RF-00k).
 
 1. Usuário faz login
 2. UI consulta `GET /api/setup/status`
 3. Se não há contas nem cartões → redirect para `/contas` (ou wizard de setup) com mensagem explicativa
 4. Usuário cadastra ao menos uma **Conta** e/ou **Cartão**
-5. Somente então a navegação libera importação e demais módulos de dados
+5. Sistema **sugere** cadastro de **Categorias** em `/categorias` quando `hasCategories` é false (não bloqueia importação)
+6. Somente com conta ou cartão cadastrado a navegação libera importação e demais módulos de dados
 
 ```mermaid
 flowchart TD
   Login[POST /api/auth/login] --> Check{tem conta ou cartão?}
   Check -->|não| SetupUI[ui/modules/accounts]
-  Check -->|sim| Home[Dashboard / menu completo]
+  Check -->|sim| CatHint{hasCategories?}
+  CatHint -->|não| CatSuggest[ui/modules/categories sugerido]
+  CatHint -->|sim| Home[Dashboard / menu completo]
+  CatSuggest --> Home
   SetupUI --> Create[POST /api/accounts ou /api/cards]
-  Create --> Home
+  Create --> CatHint
   Home --> ImportGate{importar?}
   ImportGate -->|sem origem para modo| SetupUI
   ImportGate -->|ok| ImportUI[ui/modules/import]
 ```
 
-- Rotas `/contas` e `/cartoes` (ou aba única "Contas e cartões")
-- Desativação em vez de delete quando há lançamentos vinculados
+- Rotas `/contas`, `/cartoes` e `/categorias` (ou aba única "Contas e cartões" + menu Categorias)
+- Desativação em vez de delete quando há lançamentos vinculados (contas, cartões e categorias)
 
 ### 6.1 Interface web de importação
 
-A importação é o canal de entrada de lançamentos — feita em `ui/modules/import/`, **após** cadastro de origens (RF-01, RF-02a–d). Bloqueada se não houver conta (modo transações) ou cartão + fatura (modo fatura).
+A importação é o canal de entrada de lançamentos — feita em `ui/modules/import/`, **após** cadastro de origens e **com módulo de categorias disponível** (RF-01, RF-02a–e). Bloqueada se não houver conta (modo transações) ou cartão + fatura (modo fatura).
 
 **Componentes da UI:**
 
@@ -283,40 +298,47 @@ A importação é o canal de entrada de lançamentos — feita em `ui/modules/im
 | **Seleção de origem** | Conta cadastrada **ou** Cartão + Fatura de destino |
 | **Seleção de parser** | Dropdown; único item "Padrão" no MVP |
 | **Upload** | Arquivo `.csv` + botão enviar |
+| **Pré-visualização** | Lista de lançamentos parseados; destaque de **categorias desconhecidas** com UI de mapeamento (existente ou criar nova) |
+| **Confirmação** | Persistência após 100% das categorias resolvidas (RN-12) |
 | **Estado de progresso** | Loading durante processamento síncrono no server |
 | **Resumo pós-importação** | Contadores: novos, duplicados ignorados, erros por linha |
 | **Histórico** | Lista de `ImportBatch` anteriores |
 
 **Fluxo do usuário:**
 
-1. Usuário autenticado acessa `/importar` (somente se setup completo)
+1. Usuário autenticado acessa `/importar` (somente se setup de origens completo)
 2. Escolhe modo: **transações** ou **fatura**
 3. Seleciona **Conta** (transações) ou **Cartão + Fatura** (fatura)
 4. Seleciona parser (padrão no MVP)
 5. Faz upload do CSV
-6. UI envia `multipart/form-data` para `POST /api/imports`
-7. Server valida, delega ao parser, persiste com deduplicação vinculada à origem
-8. UI exibe resumo e atualiza histórico
+6. UI envia `multipart/form-data` para `POST /api/imports/preview`
+7. Server parseia e retorna preview com `unknownCategories[]`
+8. Usuário mapeia categorias desconhecidas (dropdown de cadastradas ou "criar nova")
+9. UI envia `POST /api/imports/confirm` com `categoryMappings` + metadados do lote
+10. Server persiste com deduplicação, resolvendo `category` → `categoryId`
+11. UI exibe resumo e atualiza histórico
 
 ```mermaid
 sequenceDiagram
   participant User as Usuário
   participant ImportUI as Tela Importação
-  participant API as POST /api/imports
+  participant Preview as POST /api/imports/preview
+  participant Confirm as POST /api/imports/confirm
   participant Parser
+  participant Categories
   participant Domain
 
   User->>ImportUI: modo, origem, parser e arquivo CSV
-  alt modo transações
-    ImportUI->>API: multipart accountId + parserId + file
-  else modo fatura
-    ImportUI->>API: multipart cardId + invoiceId + parserId + file
-  end
-  API->>Parser: parse(buffer) → CanonicalTransaction[]
-  Parser-->>API: modelo canônico
-  API->>Domain: persist + deduplicate
-  Domain-->>API: ImportResult
-  API-->>ImportUI: created, skipped, errors
+  ImportUI->>Preview: multipart accountId/cardId + parserId + file
+  Preview->>Parser: parse(buffer) → CanonicalTransaction[]
+  Parser-->>Preview: modelo canônico com category string
+  Preview-->>ImportUI: rows, unknownCategories, summary
+  User->>ImportUI: mapeia categorias desconhecidas
+  ImportUI->>Confirm: categoryMappings + batch metadata
+  Confirm->>Categories: resolve/create categoryId
+  Confirm->>Domain: persist + deduplicate
+  Domain-->>Confirm: ImportResult
+  Confirm-->>ImportUI: created, skipped, errors
   ImportUI-->>User: resumo visual
 ```
 
@@ -324,8 +346,9 @@ sequenceDiagram
 
 - Upload via `multipart/form-data` (NestJS `FileInterceptor`); limite configurável (ex.: 10 MB)
 - CSV **não persistido em disco** no MVP — processado em memória; metadados em `ImportBatch`
-- `GET /api/imports/options` — modos, parsers, contas/cartões/faturas ativos
+- `GET /api/imports/options` — modos, parsers, contas/cartões/faturas/categorias ativos
 - Importação **síncrona** no MVP; sem fila nem SSE
+- `categoryMappings`: `Record<string, categoryId | { create: { name } }>` — chave é o texto do CSV
 
 ### 6.2 Vínculo manual pagamento ↔ fatura
 
@@ -365,7 +388,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Onboarding
 
-- `GET /api/setup/status` — `{ hasAccounts, hasCards, readyForImport }` — redirect pós-login na UI
+- `GET /api/setup/status` — `{ hasAccounts, hasCards, hasCategories, readyForImport }` — redirect pós-login na UI; `readyForImport` = `hasAccounts || hasCards`
 
 ### Contas
 
@@ -381,10 +404,17 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 - `GET /api/cards/:cardId/invoices` — listar faturas do cartão
 - `POST /api/cards/:cardId/invoices` — criar fatura (usado antes/durante importação)
 
+### Categorias
+
+- `GET /api/categories` — listar (ativas por padrão)
+- `POST /api/categories` — criar
+- `PATCH /api/categories/:id` — editar/desativar
+
 ### Importação (interface web)
 
-- `GET /api/imports/options` — modos, parsers, contas/cartões/faturas ativos
-- `POST /api/imports` — `multipart/form-data`: `importMode` + `accountId` | (`cardId` + `invoiceId`) + `parserId` + `file` → `{ created, skipped, errors[] }`
+- `GET /api/imports/options` — modos, parsers, contas/cartões/faturas/categorias ativos
+- `POST /api/imports/preview` — `multipart/form-data`: `importMode` + `accountId` | (`cardId` + `invoiceId`) + `parserId` + `file` → `{ rows, unknownCategories[], summary }`
+- `POST /api/imports/confirm` — body JSON: metadados do lote + `categoryMappings` → `{ created, skipped, errors[] }`
 - `GET /api/imports` — histórico de importações
 - `GET /api/imports/:id` — detalhe de uma importação (opcional no MVP)
 
@@ -451,10 +481,10 @@ Extrair `src/server/` inteiro para app NestJS standalone e `src/ui/` inteiro par
 |--------------------|------------------------|
 | §7.1 "monolito modular" | Um app web TS: `src/server/` (NestJS, `/api/**`) + `src/ui/` (React SPA); módulos espelhados por domínio |
 | §7.1 "separação frontend/backend" | Separação física em `server/` e `ui/` no mesmo repo/processo no MVP; extraíveis como apps distintos depois |
-| §3.12 usuário fixo | Seed + env vars; sem tela de cadastro de usuários |
-| Cadastro de contas/cartões | Módulo `accounts` como primeiro módulo de domínio; onboarding obrigatório antes de importação |
-| RF-02 importação | Modo transações/fatura + seleção de Conta ou Cartão+Fatura + parser (padrão no MVP) |
-| Modelo canônico "será definido no doc técnico" | Interface TypeScript **server-only** em `server/modules/import/` + FK `accountId`/`cardId` |
+| §3.13 usuário fixo | Seed + env vars; sem tela de cadastro de usuários |
+| Cadastro de contas/cartões/categorias | Módulos `accounts` e `categories` antes da importação; onboarding obrigatório para origens; categorias recomendadas |
+| RF-02 importação | Modo transações/fatura + seleção de Conta ou Cartão+Fatura + parser + preview/confirm com mapeamento de categorias |
+| Modelo canônico "será definido no doc técnico" | Interface TypeScript **server-only** em `server/modules/import/` + FK `accountId`/`cardId`/`categoryId` |
 | RF-01 / RF-02 importação via UI | Tela web com upload; sem CLI nem importação automática |
 | Sem menção a código compartilhado | Tipos de API duplicados na UI; contrato é a API HTTP, não imports TypeScript cross-layer |
 
@@ -473,7 +503,7 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | Idioma da UI | Português |
 | Importação web | < 5s para ~1k linhas (meta); UI exibe loading durante o request |
 | Validação de upload | Client-side mínima (arquivo, `.csv`, modo, origem, parser); validação completa no server |
-| Setup inicial | Redirect para cadastro se `setup/status` indicar estado vazio |
+| Setup inicial | Redirect para cadastro de contas/cartões se `setup/status` indicar estado vazio; sugestão de categorias quando `hasCategories` false |
 
 ---
 
@@ -504,3 +534,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 |------|-----------|
 | 2026-09-01 | Versão inicial: app web único, `src/server/` + `src/ui/`, importação via UI, regimes competência/caixa |
 | 2026-09-01 | Cadastro de contas/cartões como requisito fundacional; importação por modo com parser; módulo `accounts` |
+| 2026-09-02 | Cadastro de categorias (`categories`); `categoryId` em Transaction; importação em duas fases (preview/confirm) com mapeamento |

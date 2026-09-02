@@ -18,13 +18,13 @@ mao-de-vaca/
   docs/        PROJECT_DEFINITION.MD, ARCHITECTURE.md
 ```
 
-Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `import`, `transactions`, `invoices`, `parent-purchases`, `reports`.
+Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `categories`, `import`, `transactions`, `invoices`, `parent-purchases`, `reports`.
 
 ## Principles
 
 - **App único:** um processo Node; `/api/**` → NestJS; demais rotas → SPA (fallback `index.html`).
-- **Cadastro primeiro:** contas e cartões (`accounts`) são o primeiro requisito de domínio — antes de importação, lançamentos e faturas.
-- **Onboarding:** pós-login sem contas/cartões → redirect para cadastro (`GET /api/setup/status`).
+- **Cadastro primeiro:** contas, cartões (`accounts`) e categorias (`categories`) são requisitos do domínio **antes da importação**; lançamentos e faturas dependem de origens e categorias cadastradas.
+- **Onboarding:** pós-login sem contas/cartões → redirect para cadastro (`GET /api/setup/status`); categorias recomendadas quando `hasCategories` false, sem bloquear importação.
 - **State:** `src/server/` é dono de regras de negócio (regimes, saldos de fatura, dedup). UI renderiza snapshots da API.
 - **Boundary:** `server/` ↔ `ui/` somente via HTTP. **Sem** pasta `shared/`, sem imports cross-layer.
 - **Module borders:** `server/modules/X/` não importa `ui/`; `ui/modules/X/` não importa `server/`. Tipos de API duplicados na UI.
@@ -38,7 +38,8 @@ Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `i
 | Camada | Owns |
 |--------|------|
 | `server/modules/accounts/` | CRUD Conta + Cartão, setup/status |
-| `server/modules/import/` | Upload CSV, parsers, modelo canônico, dedup, ImportBatch |
+| `server/modules/categories/` | CRUD Categoria; unicidade de nome por `userId` |
+| `server/modules/import/` | Preview/confirm CSV, parsers, modelo canônico, mapeamento de categorias, dedup, ImportBatch |
 | `server/modules/transactions/` | Lançamentos, tipos, regimes |
 | `server/modules/invoices/` | Faturas (FK cartão), saldo/status derivados, vínculo pagamento |
 | `server/modules/parent-purchases/` | Compra-pai informacional |
@@ -51,5 +52,6 @@ Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `i
 - Compra-pai **não** entra em somas; só parcelas (RN-03).
 - Fatura sempre vinculada a **Cartão** cadastrado (RN-10).
 - Lançamento referencia **Conta** ou **Cartão** cadastrado — nunca banco solto.
+- Lançamento referencia **Categoria** cadastrada (`categoryId`); importação resolve strings do CSV na confirmação (RN-12).
 
 Full details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
