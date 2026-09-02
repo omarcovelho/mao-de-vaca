@@ -1,0 +1,119 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, master]
+  push:
+    branches: [develop, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      ui: ${{ steps.filter.outputs.ui }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'src/server/**'
+              - 'prisma/**'
+              - 'nest-cli.json'
+              - 'tsconfig.json'
+              - 'tsconfig.server.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'eslint.config.mjs'
+              - 'jest.config.cjs'
+            ui:
+              - 'src/ui/**'
+              - 'tsconfig.ui.json'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'eslint.config.mjs'
+              - 'vitest.config.ts'
+            workflows:
+              - '.github/**'
+
+  server:
+    name: server
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.server == 'true' ||
+      needs.changes.outputs.workflows == 'true'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mao
+          POSTGRES_PASSWORD: mao
+          POSTGRES_DB: mao_de_vaca
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mao -d mao_de_vaca"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://mao:mao@localhost:5432/mao_de_vaca
+      PORT: 3000
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npm run lint:ci -- src/server
+      - run: npm run build:server
+      - run: npm run test:server
+
+  ui:
+    name: ui
+    runs-on: ubuntu-latest
+    needs: changes
+    if: |
+      github.event_name == 'push' ||
+      needs.changes.outputs.ui == 'true' ||
+      needs.changes.outputs.workflows == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run lint:ci -- src/ui
+      - run: npm run build:ui
+
+  security-audit:
+    name: security-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high

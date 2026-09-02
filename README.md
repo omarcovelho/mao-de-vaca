@@ -1,6 +1,34 @@
 # Mão de Vaca
 
+![CI](https://github.com/omarcovelho/mao-de-vaca/actions/workflows/ci.yml/badge.svg?branch=master)
+
 Controle pessoal de gastos e receitas (MVP).
+
+## Documentation
+
+- [docs/PROJECT_DEFINITION.MD](docs/PROJECT_DEFINITION.MD) — product scope, domain model, locked decisions
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — technical architecture, repo layout, API modules
+
+## CI/CD
+
+Pull requests e pushes para `develop` e `master` disparam GitHub Actions:
+
+| Check | O que valida |
+|-------|----------------|
+| `server` | Prisma validate/generate, lint, build, testes unitários (Jest; Postgres service) |
+| `ui` | lint, build |
+| `security-audit` | `npm audit` (high/critical) na raiz |
+| `secrets-scan` | Gitleaks — secrets commitados |
+| `CodeQL` | Análise estática de segurança no código |
+| `dependency-review` | Dependências vulneráveis introduzidas no PR |
+
+**Branch protection (recomendado):** em `develop` e `master`, exija os checks acima antes do merge. No GitHub: Settings → Branches → Add rule.
+
+**Segurança no repositório (one-time):** ative Secret scanning e Push protection em Settings → Code security.
+
+**Pre-commit:** após `npm install` na raiz, Husky roda lint nos arquivos staged (`src/server/**/*.ts`, `src/ui/**/*.{ts,tsx}`).
+
+Node.js **20** (ver [`.nvmrc`](.nvmrc)).
 
 ## Pré-requisitos
 
@@ -44,3 +72,5 @@ npm run dev
 | `npm run dev` | Nest + Vite em paralelo |
 | `npm run build` | Build da UI (`dist/ui`) e do server |
 | `npm start` | Sobe o server em produção (serve SPA + API) |
+| `npm run lint` | ESLint com `--fix` em server e ui |
+| `npm test` | Jest (server) + Vitest (ui) |
