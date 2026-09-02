@@ -10,4 +10,5 @@ module.exports = {
   coverageDirectory: '../../coverage/server',
   testEnvironment: 'node',
   passWithNoTests: true,
+  forceExit: true,
 };
