@@ -72,6 +72,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://mao:mao@localhost:5432/mao_de_vaca
       PORT: 3000
+      JWT_SECRET: ci-test-jwt-secret
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v5
@@ -82,6 +83,7 @@ jobs:
       - run: npm ci
       - run: npx prisma validate
       - run: npx prisma generate
+      - run: npx prisma migrate deploy
       - run: npm run lint:ci -- src/server
       - run: npm run build:server
       - run: npm run test:server
