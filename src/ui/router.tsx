@@ -1,4 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
+import { LoginPage } from './modules/auth/login-page';
+import { ProtectedRoute } from './modules/auth/protected-route';
 
 function HomePage() {
   return (
@@ -12,7 +14,15 @@ function HomePage() {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<HomePage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <HomePage />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
