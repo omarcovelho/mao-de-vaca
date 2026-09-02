@@ -8,8 +8,54 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
+  id           String    @id @default(cuid())
+  username     String    @unique
   passwordHash String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  banks        Bank[]
+  accounts     Account[]
+  cards        Card[]
+}
+
+model Bank {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id])
+  accounts  Account[]
+  cards     Card[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model Account {
+  id        String   @id @default(cuid())
+  userId    String
+  bankId    String
+  label     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  bank      Bank     @relation(fields: [bankId], references: [id])
+
+  @@index([userId])
+  @@index([bankId])
+}
+
+model Card {
+  id        String   @id @default(cuid())
+  userId    String
+  bankId    String
+  label     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  bank      Bank     @relation(fields: [bankId], references: [id])
+
+  @@index([userId])
+  @@index([bankId])
 }

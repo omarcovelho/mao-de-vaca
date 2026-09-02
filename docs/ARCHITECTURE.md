@@ -117,7 +117,7 @@ Cada domínio (`auth`, `accounts`, `categories`, `import`, `transactions`, `invo
 | Módulo | `server/modules/` | `ui/modules/` |
 |--------|-------------------|---------------|
 | **auth** | Login, guard JWT, contexto de tenant | Página de login, proteção de rotas |
-| **accounts** | CRUD Conta + Cartão, `setup/status` | Cadastro, listagem, onboarding pós-login |
+| **accounts** | CRUD Conta + Cartão + Banco, `setup/status` | Cadastro, listagem, onboarding pós-login; seleção/criação de banco |
 | **categories** | CRUD Categoria; unicidade de nome por `userId` | Listagem, formulário, desativação |
 | **import** | Preview/confirm, parsers, deduplicação, mapeamento de categorias, `ImportBatch` | Formulário por modo, pré-visualização com mapeamento, histórico, resumo |
 | **transactions** | CRUD, tipos, regimes, filtros | Tabela filtrável de lançamentos |
@@ -181,8 +181,9 @@ flowchart LR
 | Entidade | Armazenamento | Notas |
 |----------|---------------|-------|
 | **User** | PostgreSQL | Tenant/dono dos dados; único usuário seedado no MVP (`AUTH_*` env vars) |
-| **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `label`, `institution`, `active` |
-| **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `label`, `institution`, `active` |
+| **Bank** (`Banco`) | PostgreSQL | `id`, `userId`, `name` (único por usuário); seed MVP: Nubank, Itaú, Inter, Sofisa, Daycoval |
+| **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
+| **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Category** (`Categoria`) | PostgreSQL | `id`, `userId`, `name` (único por usuário), `active` |
 | **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`, `dedupKey` |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** |
@@ -392,14 +393,16 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Contas
 
-- `GET /api/accounts` — listar (ativas por padrão)
-- `POST /api/accounts` — criar
+- `GET /api/banks` — listar bancos do usuário (ordenados por nome)
+- `POST /api/banks` — criar banco (`{ name }`); 409 se nome duplicado no usuário
+- `GET /api/accounts` — listar (ativas por padrão); inclui `bank`
+- `POST /api/accounts` — criar (`{ label, bankId }`)
 - `PATCH /api/accounts/:id` — editar/desativar
 
 ### Cartões
 
-- `GET /api/cards` — listar (ativos por padrão)
-- `POST /api/cards` — criar
+- `GET /api/cards` — listar (ativas por padrão); inclui `bank`
+- `POST /api/cards` — criar (`{ label, bankId }`)
 - `PATCH /api/cards/:id` — editar/desativar
 - `GET /api/cards/:cardId/invoices` — listar faturas do cartão
 - `POST /api/cards/:cardId/invoices` — criar fatura (usado antes/durante importação)

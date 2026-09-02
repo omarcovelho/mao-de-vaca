@@ -37,7 +37,7 @@ Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `c
 
 | Camada | Owns |
 |--------|------|
-| `server/modules/accounts/` | CRUD Conta + Cartão, setup/status |
+| `server/modules/accounts/` | CRUD Conta + Cartão + Banco, setup/status |
 | `server/modules/categories/` | CRUD Categoria; unicidade de nome por `userId` |
 | `server/modules/import/` | Preview/confirm CSV, parsers, modelo canônico, mapeamento de categorias, dedup, ImportBatch |
 | `server/modules/transactions/` | Lançamentos, tipos, regimes |

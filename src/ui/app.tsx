@@ -1,4 +1,4 @@
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Link } from 'react-router-dom';
 import { AuthProvider } from './modules/auth/auth-context';
 import { useAuth } from './modules/auth/use-auth';
 import { AppRouter } from './router';
@@ -12,7 +12,17 @@ function AppHeader() {
 
   return (
     <header className="app-header">
-      <p className="brand">Mão de Vaca</p>
+      <div className="header-brand">
+        <p className="brand">
+          <Link to="/">Mão de Vaca</Link>
+        </p>
+        {!loading && user ? (
+          <nav className="app-nav" aria-label="Principal">
+            <Link to="/contas">Contas</Link>
+            <Link to="/cartoes">Cartões</Link>
+          </nav>
+        ) : null}
+      </div>
       {!loading && user ? (
         <button type="button" className="logout-button" onClick={handleLogout}>
           Sair

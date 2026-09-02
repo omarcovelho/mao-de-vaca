@@ -57,16 +57,24 @@ Para lançamentos de conta/débito, competência e caixa coincidem. Para lançam
 Conta bancária de movimentação (corrente, poupança etc.). **Entidade fundacional** — todo extrato importado e todo débito de pagamento de fatura referencia uma Conta cadastrada.
 
 - Pertence ao usuário-dono.
-- Atributos conceituais: **apelido** (ex.: "Nubank PJ"), **instituição/banco**.
+- Atributos conceituais: **apelido** (ex.: "Nubank PJ") e **Banco** cadastrado (§3.4b).
 - Origem de extratos importados no modo **transações** e de débitos de pagamento de fatura.
 - Não possui faturas.
+
+### 3.4b Banco
+Instituição financeira associada a contas e cartões. **Catálogo por usuário**.
+
+- Pertence ao usuário-dono; nome único por usuário.
+- No MVP, o seed provisiona bancos comuns: Nubank, Itaú, Inter, Sofisa, Daycoval.
+- O usuário pode **cadastrar um banco novo** quando a instituição não estiver na lista.
+- Conta e Cartão referenciam um Banco (não há texto livre de instituição).
 
 ### 3.5 Cartão
 Cartão de crédito. **Entidade fundacional** — toda fatura e toda compra/estorno importado de fatura referencia um Cartão cadastrado.
 
 - Pertence ao usuário-dono.
-- Atributos conceituais: **apelido**, **instituição/banco** emissor.
-- Agrega **Faturas** (§3.8); a instituição do cartão substitui a noção de banco solto nas faturas.
+- Atributos conceituais: **apelido** e **Banco** emissor cadastrado (§3.4b).
+- Agrega **Faturas** (§3.8); o banco do cartão substitui a noção de banco solto nas faturas.
 
 ### 3.6 Categoria
 Classificação analítica dos lançamentos (ex.: "Alimentação", "Transporte"). **Entidade fundacional** — todo lançamento referencia uma Categoria cadastrada.
@@ -204,8 +212,10 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RF-00c** — Toda entidade do domínio pertence a um usuário-dono, e as operações do sistema consideram esse vínculo de propriedade, ainda que haja um só usuário no MVP.
 
 ### 5.1 Contas e cartões
-- **RF-00d** — O usuário cadastra contas bancárias (apelido, instituição/banco).
-- **RF-00e** — O usuário cadastra cartões de crédito (apelido, instituição/banco).
+- **RF-00d** — O usuário cadastra contas bancárias (apelido e **Banco** cadastrado).
+- **RF-00e** — O usuário cadastra cartões de crédito (apelido e **Banco** cadastrado).
+- **RF-00d1** — O sistema mantém um catálogo de bancos por usuário; no MVP, o seed inclui Nubank, Itaú, Inter, Sofisa e Daycoval.
+- **RF-00d2** — O usuário pode cadastrar um banco adicional quando a instituição não existir na lista (nome único por usuário).
 - **RF-00f** — O usuário lista, edita e pode desativar contas e cartões; entidades com lançamentos vinculados não são removidas fisicamente no MVP (desativação).
 - **RF-00g** — O sistema impede importação e demais entradas de dados enquanto não existir ao menos uma conta ou cartão cadastrado, conforme o modo exigido.
 - **RF-00h** — Após o login, o sistema orienta o usuário ao cadastro de contas/cartões quando ainda não houver nenhum cadastrado (estado vazio).
