@@ -1,0 +1,57 @@
+---
+description: Mão de Vaca architecture boundaries and repo structure
+alwaysApply: true
+---
+
+# Architecture
+
+**Hierarchy:** [docs/PROJECT_DEFINITION.MD](docs/PROJECT_DEFINITION.MD) (§3, §5, §6) → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → current epic. Document deviations explicitly.
+
+## Structure
+
+```
+mao-de-vaca/
+  src/
+    server/    NestJS — /api/**, domínio, Prisma, parsers, secrets
+    ui/        React + Vite — SPA, fetch('/api/...'), tipos locais por módulo
+  prisma/      Schema + migrations (server-only)
+  docs/        PROJECT_DEFINITION.MD, ARCHITECTURE.md
+```
+
+Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `categories`, `import`, `transactions`, `invoices`, `parent-purchases`, `reports`.
+
+## Principles
+
+- **App único:** um processo Node; `/api/**` → NestJS; demais rotas → SPA (fallback `index.html`).
+- **Cadastro primeiro:** contas, cartões (`accounts`) e categorias (`categories`) são requisitos do domínio **antes da importação**; lançamentos e faturas dependem de origens e categorias cadastradas.
+- **Onboarding:** pós-login sem contas/cartões → redirect para cadastro (`GET /api/setup/status`); categorias recomendadas quando `hasCategories` false, sem bloquear importação.
+- **State:** `src/server/` é dono de regras de negócio (regimes, saldos de fatura, dedup). UI renderiza snapshots da API.
+- **Boundary:** `server/` ↔ `ui/` somente via HTTP. **Sem** pasta `shared/`, sem imports cross-layer.
+- **Module borders:** `server/modules/X/` não importa `ui/`; `ui/modules/X/` não importa `server/`. Tipos de API duplicados na UI.
+- **Importação:** só via web; modos `transactions` (Conta) e `invoice` (Cartão + Fatura); parser selecionável (padrão no MVP).
+- **Multitenant:** `userId` em todas as entidades; MVP com um usuário fixo via env/seed.
+- **Secrets:** `DATABASE_URL`, `JWT_SECRET`, auth — `server/` only, never in React bundle.
+- **Stack:** TypeScript (um `package.json`). NestJS + React + Vite + PostgreSQL (Prisma). Docker Compose local.
+
+## Responsibilities
+
+| Camada | Owns |
+|--------|------|
+| `server/modules/accounts/` | CRUD Conta + Cartão, setup/status |
+| `server/modules/categories/` | CRUD Categoria; unicidade de nome por `userId` |
+| `server/modules/import/` | Preview/confirm CSV, parsers, modelo canônico, mapeamento de categorias, dedup, ImportBatch |
+| `server/modules/transactions/` | Lançamentos, tipos, regimes |
+| `server/modules/invoices/` | Faturas (FK cartão), saldo/status derivados, vínculo pagamento |
+| `server/modules/parent-purchases/` | Compra-pai informacional |
+| `server/modules/reports/` | Indicadores, categorias, evolução mensal por regime |
+| `ui/modules/*/` | Telas, hooks, API client local; onboarding e formulários |
+
+## Domain invariants (não duplicar na UI)
+
+- Pagamento de fatura = **transferência**, nunca despesa (RN-02).
+- Compra-pai **não** entra em somas; só parcelas (RN-03).
+- Fatura sempre vinculada a **Cartão** cadastrado (RN-10).
+- Lançamento referencia **Conta** ou **Cartão** cadastrado — nunca banco solto.
+- Lançamento referencia **Categoria** cadastrada (`categoryId`); importação resolve strings do CSV na confirmação (RN-12).
+
+Full details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

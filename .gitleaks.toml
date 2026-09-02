@@ -1,0 +1,22 @@
+title = "mao-de-vaca gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "CI and local dev placeholder values"
+paths = [
+  '''\.github/workflows/.*''',
+  '''docker-compose\.yml''',
+  '''\.env\.example''',
+  '''README\.md''',
+]
+
+[[allowlists]]
+description = "Docker compose / local dev database credentials"
+regexTarget = "match"
+regexes = [
+  '''POSTGRES_PASSWORD:\s*mao''',
+  '''POSTGRES_USER:\s*mao''',
+  '''postgresql://mao:mao@''',
+]
