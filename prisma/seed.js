@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 
 const prisma = new PrismaClient();
 
+const DEFAULT_BANKS = ['Nubank', 'Itaú', 'Inter', 'Sofisa', 'Daycoval'];
+
 async function main() {
   const username = process.env.AUTH_USERNAME;
   const password = process.env.AUTH_PASSWORD;
@@ -13,11 +15,27 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  await prisma.user.upsert({
+  const user = await prisma.user.upsert({
     where: { username },
     update: { passwordHash },
     create: { username, passwordHash },
   });
+
+  for (const name of DEFAULT_BANKS) {
+    await prisma.bank.upsert({
+      where: {
+        userId_name: {
+          userId: user.id,
+          name,
+        },
+      },
+      update: {},
+      create: {
+        userId: user.id,
+        name,
+      },
+    });
+  }
 }
 
 main()

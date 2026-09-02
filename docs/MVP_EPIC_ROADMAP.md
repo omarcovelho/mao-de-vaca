@@ -104,19 +104,19 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Branch sugerida:** `feature/v2-accounts`
 
-**Resultado para o usuário:** Após login, se não há contas/cartões, é orientado ao cadastro; cria **Conta** e **Cartão** com apelido e instituição; lista e desativa origens.
+**Resultado para o usuário:** Após login, onboarding opcional orienta ao cadastro; cria **Conta** e **Cartão** com apelido e **Banco** (pré-cadastrados no seed ou criados na hora); lista e desativa origens.
 
 **Entregas verticais:**
 
 | Camada | Escopo |
 |--------|--------|
-| **`src/server/modules/accounts/`** | CRUD `Account` + `Card`; `GET /api/setup/status`; desativação (`active: false`); filtro `userId` |
-| **`src/ui/modules/accounts/`** | Telas `/contas` e `/cartoes` (ou aba única); formulários; redirect pós-login quando `setup/status` vazio; bloqueio de importação sem origem |
-| **`prisma/`** | `Account`, `Card` com `userId` |
+| **`src/server/modules/accounts/`** | CRUD `Account` + `Card` + `Bank`; `GET /api/setup/status`; desativação (`active: false`); filtro `userId` |
+| **`src/ui/modules/accounts/`** | Telas `/contas` e `/cartoes`; select de banco + cadastro de banco; onboarding skippable |
+| **`prisma/`** | `Bank`, `Account`, `Card` com `userId`; seed dos bancos MVP |
 
-**Demo:** Primeiro login → wizard de cadastro → criar “Nubank CC” (conta) e “Visa Nubank” (cartão) → `setup/status.readyForImport` true → menu liberado.
+**Demo:** Login → onboarding (Pular ou cadastrar) → criar “Nubank CC” escolhendo banco Nubank (ou cadastrar banco novo) → listar/desativar.
 
-**Mapeia para:** RF-00d–h; RN-08, RN-09; PROJECT_DEFINITION §3.4–3.5.
+**Mapeia para:** RF-00d–h, RF-00d1–d2; RN-08, RN-09; PROJECT_DEFINITION §3.4–3.5.
 
 **Depende de:** V1.
 
@@ -124,10 +124,10 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 | Fase | Resumo |
 |------|--------|
-| A Persistence | Prisma Account/Card |
-| B API | CRUD + setup/status |
-| C UI | Cadastro, listagem, onboarding guard |
-| D Sign-off | Fluxo primeiro-login demo + testes de domínio |
+| A Persistence | Prisma Bank/Account/Card + seed bancos |
+| B API | CRUD accounts/cards/banks + setup/status |
+| C UI | Cadastro com select de banco, listagem, onboarding soft |
+| D Sign-off | Fluxo demo + testes de domínio |
 
 ---
 
@@ -398,3 +398,4 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 |------|-----------|
 | 2026-09-01 | Versão inicial: épicos verticais V0–V9 alinhados a cadastro-first e regimes competência/caixa |
 | 2026-09-02 | V2.5 Categories: cadastro de categorias antes da importação; V3/V4 com preview/mapeamento |
+| 2026-09-02 | V2: bancos pré-cadastrados (seed) + cadastro on-demand; Account/Card com `bankId` |
