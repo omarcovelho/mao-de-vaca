@@ -1,0 +1,46 @@
+---
+description: Mão de Vaca quality gates and strict TDD workflow
+alwaysApply: true
+---
+
+# Quality Gate
+
+## Strict TDD
+
+1. **Red** — escrever teste falhando para o comportamento (não detalhe de implementação)
+2. **Green** — código mínimo para passar
+3. **Refactor** — limpar; testes permanecem verdes
+
+- Obrigatório para toda mudança de comportamento. Sem lógica de produção sem teste falhando antes.
+- **E2E:** fora do escopo, salvo pedido explícito do usuário.
+- **`src/server/` (Jest):** services de domínio, controllers HTTP, parsers de importação, deduplicação, cálculo de saldo/status de fatura, filtros por regime (`competence` / `cash`), guards de auth e `userId`.
+- **`src/ui/` (Vitest):** API client, hooks, componentes e fluxos não triviais (onboarding, formulário de importação por modo, toggle de regime).
+- Mock de I/O externo (PostgreSQL em testes de integração pode usar DB de teste ou repositório in-memory — nunca produção). Sem chamadas reais a serviços externos em testes unitários.
+- Priorizar testes alinhados ao **resultado do épico/feature** — não camadas horizontais isoladas sem valor.
+
+## O que testar no domínio (server)
+
+| Área | Comportamentos críticos |
+|------|-------------------------|
+| **accounts** | CRUD, desativação, `setup/status`, bloqueio sem origem cadastrada |
+| **import** | Parser → modelo canônico, dedup em reimportação, rejeição sem conta/cartão |
+| **transactions** | Tipos (despesa/receita/transferência), FK `accountId` ou `cardId` |
+| **invoices** | Saldo derivado, status (aberta/parcial/quitada), vínculo pagamento M:N |
+| **reports** | Totais por regime; transferências e compra-pai excluídas das somas |
+
+## Definition of Done
+
+- [ ] Teste falhando primeiro; suíte completa verde
+- [ ] Demoável: app sobe (`server` + `ui` em dev, ou build único em prod)
+- [ ] Rastreia [docs/PROJECT_DEFINITION.MD](docs/PROJECT_DEFINITION.MD) (§3, §5, §6) ou [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); desvios documentados
+- [ ] Regras de negócio no `server/`; UI não duplica contabilização (regimes, saldos, dedup)
+- [ ] Sem imports `server/` ↔ `ui/`; sem pasta `shared/`; sem secrets no bundle React
+- [ ] Cadastro de contas/cartões antes de importação respeitado (RF-00d–h, RN-08)
+- [ ] Textos de UI novos em português
+- [ ] Invariantes MVP: pagamento de fatura ≠ despesa (RN-02); compra-pai fora das somas (RN-03); fatura sempre com cartão (RN-10)
+
+## Skip testing
+
+Pass-throughs triviais, mudanças só de config, internals de terceiros.
+
+**Fontes:** [docs/PROJECT_DEFINITION.MD](docs/PROJECT_DEFINITION.MD) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [.cursor/rules/architecture.mdc](.cursor/rules/architecture.mdc)
