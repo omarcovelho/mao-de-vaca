@@ -67,7 +67,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Mapeia para:** ARCHITECTURE §4, §8; produto §7.1.
 
-**Notas:** Sem auth nem domínio. TDD desde o primeiro endpoint. Spec detalhada de tarefas: `docs/epics/V0_PLATFORM.md` *(a criar)*.
+**Notas:** Sem auth nem domínio. Spec detalhada: [docs/epics/V0_PLATFORM.md](./epics/V0_PLATFORM.md).
 
 | Fase | Resumo |
 |------|--------|

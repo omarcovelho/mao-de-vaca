@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: mao-de-vaca-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mao
+      POSTGRES_PASSWORD: mao
+      POSTGRES_DB: mao_de_vaca
+    ports:
+      - "5433:5432"
+    volumes:
+      - mao_de_vaca_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mao -d mao_de_vaca"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mao_de_vaca_pgdata:

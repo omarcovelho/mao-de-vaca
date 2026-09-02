@@ -3,6 +3,11 @@
 /node_modules
 /build
 /tmp
+/coverage
+
+# Prisma
+/prisma/*.db
+/prisma/*.db-journal
 
 # Logs
 logs
