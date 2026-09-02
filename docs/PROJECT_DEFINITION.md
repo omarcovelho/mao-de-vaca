@@ -8,17 +8,17 @@
 
 Aplicação web pessoal para controle de gastos e receitas a partir da importação de extratos e faturas bancárias. O diferencial central do sistema é permitir enxergar os gastos sob **dois regimes simultâneos** — competência e caixa — de modo que o usuário saiba quanto gastou economicamente em um mês, mesmo quando o pagamento efetivo (por exemplo, de uma fatura de cartão) ocorra em outro momento.
 
-Antes de qualquer importação ou operação de dados, o usuário **cadastra suas contas bancárias e cartões de crédito** — entidades fundacionais às quais todos os lançamentos, faturas e importações ficam vinculados.
+Antes de qualquer importação ou operação de dados, o usuário **cadastra suas contas bancárias, cartões de crédito e categorias** — entidades fundacionais às quais todos os lançamentos, faturas e importações ficam vinculados.
 
-O acesso é protegido por autenticação (usuário e senha). No MVP o sistema opera com **um único usuário fixo**, provisionado na configuração inicial; o modelo de dados, porém, já nasce **preparado para múltiplos tenants**, em que **cada usuário é um tenant** e é dono dos próprios dados (ver seção 3.12). A ativação efetiva do multitenant fica para versões futuras.
+O acesso é protegido por autenticação (usuário e senha). No MVP o sistema opera com **um único usuário fixo**, provisionado na configuração inicial; o modelo de dados, porém, já nasce **preparado para múltiplos tenants**, em que **cada usuário é um tenant** e é dono dos próprios dados (ver seção 3.13). A ativação efetiva do multitenant fica para versões futuras.
 
-O sistema é alimentado por arquivos CSV que chegam **já pré-categorizados** por uma ferramenta externa. A categorização em si não faz parte do escopo deste software.
+O sistema é alimentado por arquivos CSV que chegam **já pré-categorizados** por uma ferramenta externa — o nome da categoria vem no arquivo; o app mantém o **cadastro de categorias** como dado mestre e resolve o vínculo na importação. A **categorização automática** (decidir a categoria de um lançamento) não faz parte do escopo deste software.
 
 ---
 
 ## 2. Objetivos
 
-- Permitir o **cadastro de contas bancárias e cartões de crédito** como base de todas as operações — requisito anterior a importação, lançamentos e relatórios.
+- Permitir o **cadastro de contas bancárias, cartões de crédito e categorias** como base de todas as operações — requisito anterior a importação, lançamentos e relatórios.
 - Importar lançamentos financeiros a partir de arquivos CSV de múltiplas fontes (extratos de conta e faturas de cartão), vinculados às contas e cartões cadastrados.
 - Registrar cada lançamento de forma que ele possa ser analisado tanto em **regime de competência** quanto em **regime de caixa**.
 - Modelar corretamente o ciclo do cartão de crédito (compra, parcelamento, fatura, pagamento, estorno) sem contagem duplicada de gastos.
@@ -47,9 +47,9 @@ Consequência importante e desejada: se o pagamento de uma fatura ainda não foi
 Unidade básica do sistema. Cada lançamento possui:
 - uma **data de competência** (quando o gasto aconteceu economicamente);
 - uma **data de caixa** (quando o dinheiro sai/saiu), quando aplicável;
-- uma descrição, um valor e uma categoria (pré-atribuída externamente);
+- uma descrição, um valor e uma **Categoria** cadastrada (ver §3.6; o nome chega pré-atribuído no CSV por ferramenta externa);
 - a identificação de sua **origem** — uma **Conta** ou **Cartão** cadastrado (ver §3.4 e §3.5);
-- um **tipo** (ver 3.6).
+- um **tipo** (ver 3.7).
 
 Para lançamentos de conta/débito, competência e caixa coincidem. Para lançamentos de cartão, a competência é a data da compra e o evento de caixa provém do pagamento da fatura correspondente.
 
@@ -66,26 +66,34 @@ Cartão de crédito. **Entidade fundacional** — toda fatura e toda compra/esto
 
 - Pertence ao usuário-dono.
 - Atributos conceituais: **apelido**, **instituição/banco** emissor.
-- Agrega **Faturas** (§3.7); a instituição do cartão substitui a noção de banco solto nas faturas.
+- Agrega **Faturas** (§3.8); a instituição do cartão substitui a noção de banco solto nas faturas.
 
-### 3.6 Tipos de lançamento
+### 3.6 Categoria
+Classificação analítica dos lançamentos (ex.: "Alimentação", "Transporte"). **Entidade fundacional** — todo lançamento referencia uma Categoria cadastrada.
+
+- Pertence ao usuário-dono.
+- Atributo conceitual: **nome** (único por usuário).
+- O nome chega no CSV pela ferramenta externa de categorização; na importação, o sistema **mapeia** o texto do CSV para a categoria cadastrada correspondente ou permite **criar** uma nova na pré-visualização.
+- Categorias desativadas não aparecem em novos mapeamentos; lançamentos históricos permanecem.
+
+### 3.7 Tipos de lançamento
 Três tipos, com semântica distinta:
 
 - **Despesa** — reduz o saldo; é gasto de fato. Entra nos totais de gasto e na quebra por categoria.
 - **Receita** — aumenta o saldo; é renda de fato (ex.: salário). Entra nos totais de entrada.
 - **Transferência** — movimenta caixa, mas **não** é gasto nem renda. Não entra em nenhum total de despesa nem de receita. Cobre os casos em que o dinheiro apenas muda de lugar. Possui dois usos:
-  - **Pagamento de fatura** (transferência especializada, vinculável a uma fatura — ver 3.8);
-  - **Investimento** (aporte/resgate — ver 3.10);
+  - **Pagamento de fatura** (transferência especializada, vinculável a uma fatura — ver 3.9);
+  - **Investimento** (aporte/resgate — ver 3.11);
   - e, de forma geral, qualquer movimentação entre as próprias contas do usuário.
 
 Essa distinção é o que impede a **contagem duplicada**: as compras de cartão já são reconhecidas como despesa item a item na fatura; o pagamento da fatura, sendo transferência, move o caixa sem reintroduzir o gasto.
 
-### 3.7 Fatura (como passivo)
+### 3.8 Fatura (como passivo)
 A fatura de cartão é modelada como um **passivo** — uma dívida com a operadora do cartão. É uma entidade própria, vinculada a um **Cartão** cadastrado (§3.5), identificada por **mês de referência** e **data de vencimento** (a instituição é derivada do cartão).
 
 - As **compras** de cartão (incluindo cada parcela) **aumentam** o total da fatura.
-- Os **estornos** **reduzem** o total da fatura (ver 3.9).
-- Os **pagamentos** vinculados **reduzem** o saldo em aberto (ver 3.8).
+- Os **estornos** **reduzem** o total da fatura (ver 3.10).
+- Os **pagamentos** vinculados **reduzem** o saldo em aberto (ver 3.9).
 
 O **saldo da fatura** é derivado:
 
@@ -100,7 +108,7 @@ A partir do saldo, a fatura possui um **status derivado**:
 
 Para pessoa física, o cartão de crédito é essencialmente o único passivo relevante: todos os demais gastos são pagos no momento da compra. Por isso a fatura é modelada como um conceito de primeira classe específico, em vez de um plano de contas genérico de partidas dobradas.
 
-### 3.8 Pagamento de fatura
+### 3.9 Pagamento de fatura
 Lançamento de primeira classe do tipo **transferência**, com semântica específica:
 - indica de **qual Conta** cadastrada o dinheiro saiu (pode ser instituição diferente do cartão — ex.: pagar a fatura do banco A debitando da conta do banco B; isso é suportado naturalmente);
 - pode ser **vinculado manualmente** a uma fatura, quitando-a total ou parcialmente;
@@ -113,7 +121,7 @@ O pagamento é o **evento que gera a saída de caixa** das compras daquela fatur
 - A relação é **muitos-para-um**: uma fatura pode ser quitada por **vários** pagamentos, o que dá suporte a **pagamento parcial** (ex.: parte no vencimento, parte depois).
 - Não há dedução nem casamento automático.
 
-### 3.9 Estorno
+### 3.10 Estorno
 Estorno de compra no cartão (cancelamento, devolução, compra não reconhecida) é tratado como um **lançamento de sinal oposto** ao da compra — nada além disso. Não é um caso especial no sistema:
 - entra como **mais um item** na fatura **em que apareceu**, reduzindo o total daquela fatura;
 - é categorizado como qualquer lançamento (a categoria correta chega pré-atribuída no CSV), abatendo o gasto da categoria correspondente;
@@ -125,9 +133,9 @@ Comportamentos deliberadamente **fora do escopo**:
 - não há casamento automático com a compra original;
 - não há cancelamento automático de parcelas futuras.
 
-O estorno pode ser **vinculado manualmente** a uma compra-pai (ver 3.11), se o usuário desejar, mas isso nunca é obrigatório.
+O estorno pode ser **vinculado manualmente** a uma compra-pai (ver 3.12), se o usuário desejar, mas isso nunca é obrigatório.
 
-### 3.10 Investimento
+### 3.11 Investimento
 Retirada de dinheiro da conta para investimento (aporte) é uma **transferência**: o dinheiro sai do caixa, mas o patrimônio não diminuiu — apenas mudou de forma. Portanto:
 - **afeta o regime de caixa** (o dinheiro saiu da conta no mês do aporte);
 - **não** é despesa (não entra em nenhum total de gasto);
@@ -135,7 +143,7 @@ Retirada de dinheiro da conta para investimento (aporte) é uma **transferência
 
 **Fora do escopo:** o sistema não controla rendimento, posição, custo ou performance de investimentos. Isso é responsabilidade de outra ferramenta. O app apenas reconhece a movimentação de caixa.
 
-### 3.11 Compra-pai (agregado de compra parcelada)
+### 3.12 Compra-pai (agregado de compra parcelada)
 Uma compra parcelada é registrada de forma **distribuída**: cada parcela é um **lançamento próprio**, e é a parcela que efetivamente entra nas somas — na competência, na data da compra; no caixa, via pagamento da fatura em que a parcela caiu.
 
 A **compra-pai** é um **agregado puramente informacional**:
@@ -148,10 +156,10 @@ A **compra-pai** é um **agregado puramente informacional**:
 - Não há dedução automática a partir da descrição (ex.: "5/12").
 - Lançamentos à vista simplesmente não possuem compra-pai.
 
-### 3.12 Usuário e tenant
+### 3.13 Usuário e tenant
 O acesso ao sistema é protegido por **autenticação com usuário e senha**.
 
-O modelo é concebido como **multitenant**, em que **cada usuário é um tenant** e é o **dono** dos próprios dados: toda entidade do domínio (contas, cartões, lançamentos, faturas, compras-pai, importações) pertence a um usuário, e as consultas consideram esse vínculo de propriedade.
+O modelo é concebido como **multitenant**, em que **cada usuário é um tenant** e é o **dono** dos próprios dados: toda entidade do domínio (contas, cartões, categorias, lançamentos, faturas, compras-pai, importações) pertence a um usuário, e as consultas consideram esse vínculo de propriedade.
 
 No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na **configuração inicial** — não há tela de cadastro público nem gestão de usuários. A preparação multitenant é estrutural (o domínio já carrega a noção de dono e as consultas já filtram por ele), mas o suporte efetivo a múltiplos usuários — cadastro de usuários, gestão de tenants e isolamento ativo — fica para versões futuras. O objetivo dessa preparação é evitar uma migração custosa quando o multiusuário for ativado.
 
@@ -160,7 +168,8 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 ## 4. Escopo
 
 ### 4.1 Dentro do escopo (MVP)
-- **Cadastro de contas e cartões** via interface web (listagem, criação, edição e desativação) — **requisito fundacional, anterior a todos os demais fluxos de dados**.
+- **Cadastro de contas, cartões e categorias** via interface web (listagem, criação, edição e desativação) — **requisito fundacional, anterior a importação e demais fluxos de dados**.
+- **Mapeamento de categorias na importação** — pré-visualização do CSV com resolução de categorias desconhecidas (mapear para existente ou criar nova).
 - Importação de CSV vinculada a **Conta** ou **Cartão** cadastrado, com seleção de modo (transações ou fatura), fatura de destino quando aplicável, e parser (padrão no MVP).
 - Camada de importação abstraída por um **modelo canônico** único.
 - **Deduplicação** de lançamentos para evitar duplicidade em reimportações ou meses sobrepostos.
@@ -175,7 +184,7 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - Modelo de dados preparado para multitenant (cada usuário é dono dos próprios dados), com o suporte a múltiplos usuários inativo no MVP.
 
 ### 4.2 Fora do escopo (MVP)
-- Categorização de lançamentos (feita por ferramenta externa; chega pronta no CSV).
+- Categorização automática de lançamentos (decisão feita por ferramenta externa; o app apenas recebe o nome no CSV e valida/mapeia para categoria cadastrada).
 - Detecção automática de banco/tipo de arquivo ou de conta na importação.
 - Dedução automática de parcelamento a partir da descrição.
 - Casamento/dedução automática de pagamento ↔ fatura, ou estorno ↔ compra original.
@@ -201,12 +210,18 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RF-00g** — O sistema impede importação e demais entradas de dados enquanto não existir ao menos uma conta ou cartão cadastrado, conforme o modo exigido.
 - **RF-00h** — Após o login, o sistema orienta o usuário ao cadastro de contas/cartões quando ainda não houver nenhum cadastrado (estado vazio).
 
+### 5.1b Categorias
+- **RF-00i** — O usuário cadastra categorias (nome).
+- **RF-00j** — O usuário lista, edita e pode desativar categorias; categorias com lançamentos vinculados não são removidas fisicamente no MVP (desativação).
+- **RF-00k** — Após o login, o sistema orienta ao cadastro de categorias quando a lista estiver vazia (recomendado; **não bloqueia** importação).
+
 ### 5.2 Importação
 - **RF-01** — O usuário importa lançamentos a partir de um arquivo CSV pela interface web.
 - **RF-02a** — O usuário escolhe o **modo de importação**: transações (extrato de conta) ou fatura (fatura de cartão).
 - **RF-02b** — No modo **transações**, seleciona uma **Conta** cadastrada.
 - **RF-02c** — No modo **fatura**, seleciona um **Cartão** cadastrado e a **Fatura** de destino (existente ou criada na hora).
 - **RF-02d** — Após selecionar origem, o usuário escolhe o **parser** a aplicar; no MVP existe um parser padrão.
+- **RF-02e** — Na **pré-visualização** da importação, o sistema lista categorias do CSV ainda não cadastradas e permite **mapear** para categoria existente ou **criar** nova antes de confirmar a persistência.
 - **RF-03** — Cada parser converte o arquivo para o **modelo canônico** interno do sistema, comum a todas as fontes.
 - **RF-04** — O sistema evita duplicidade de lançamentos em reimportações ou períodos sobrepostos, por meio de um mecanismo de deduplicação.
 - **RF-05** — Novos parsers podem ser adicionados no futuro sem impacto sobre o restante do sistema.
@@ -243,6 +258,9 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RN-08** — Conta ou cartão cadastrado é **pré-requisito** de qualquer importação; o sistema rejeita importação sem origem válida.
 - **RN-09** — Conta e cartão desativados não aparecem para nova importação, mas lançamentos históricos permanecem.
 - **RN-10** — Fatura só pode existir vinculada a cartão cadastrado; não há fatura órfã de cartão.
+- **RN-11** — Categoria com lançamentos vinculados não é removida fisicamente; apenas desativada (`active: false`).
+- **RN-12** — Toda importação só persiste após resolver 100% das categorias do lote (mapeamento ou criação na pré-visualização).
+- **RN-13** — Categorias desativadas não aparecem em novos mapeamentos; lançamentos históricos permanecem.
 - **RN-01** — Saldo = receitas − despesas. Transferências não afetam o total de gasto nem o de receita.
 - **RN-02** — O pagamento de fatura nunca é contabilizado como despesa; a despesa já foi reconhecida nas compras da fatura. Isso impede contagem duplicada.
 - **RN-03** — A compra-pai nunca é contabilizada; apenas as parcelas entram nas somas.
@@ -266,14 +284,15 @@ Aplicação organizada como **monolito modular**, com separação clara entre fr
 ### 7.2 Módulos (responsabilidades)
 - **Autenticação / acesso** — login com usuário e senha; identifica o usuário-dono das operações. No MVP, opera com o usuário fixo provisionado na configuração.
 - **Contas e cartões** — CRUD de contas bancárias e cartões de crédito; **primeiro módulo de domínio** após autenticação. Importação, faturas e lançamentos dependem dele.
-- **Importação** — recebe o arquivo, a conta ou cartão selecionado, a fatura quando aplicável, e o parser; delega ao mecanismo de importação apropriado.
+- **Categorias** — CRUD de categorias; **anterior à importação** (épico dedicado no roadmap). Lançamentos e relatórios referenciam categorias cadastradas.
+- **Importação** — recebe o arquivo, a conta ou cartão selecionado, a fatura quando aplicável, e o parser; pré-visualiza o lote, resolve mapeamento de categorias e confirma a persistência.
 - **Mecanismos de importação (parsers)** — conversores de CSV para o **modelo canônico** comum; no MVP, um parser padrão. Extensível por novos parsers sem tocar no restante.
 - **Domínio / contabilização** — regras de tipos de lançamento, regimes, fatura como passivo, saldo e status, compra-pai, deduplicação.
 - **Consultas / relatórios** — cálculos por período e por regime, quebras por categoria, evolução mensal.
 - **API** — expõe as operações ao frontend.
 
 ### 7.3 Camada de importação como contrato conceitual
-A abstração central do sistema: **todo parser produz lançamentos no mesmo modelo canônico interno**, vinculados à Conta ou Cartão selecionado na importação. Adicionar suporte a um novo layout significa implementar um novo parser que satisfaça esse contrato; nenhum outro módulo é afetado. O modelo canônico descreve, em nível conceitual, os atributos essenciais de um lançamento (datas de competência e caixa, descrição, valor, tipo, categoria, vínculo com conta ou cartão, referência de fatura quando aplicável, e um identificador para deduplicação).
+A abstração central do sistema: **todo parser produz lançamentos no mesmo modelo canônico interno**, vinculados à Conta ou Cartão selecionado na importação. Adicionar suporte a um novo layout significa implementar um novo parser que satisfaça esse contrato; nenhum outro módulo é afetado. O modelo canônico descreve, em nível conceitual, os atributos essenciais de um lançamento (datas de competência e caixa, descrição, valor, tipo, **nome de categoria** vindo do CSV — resolvido para categoria cadastrada na confirmação —, vínculo com conta ou cartão, referência de fatura quando aplicável, e um identificador para deduplicação).
 
 > A materialização deste modelo canônico em estruturas de dados concretas será definida no documento técnico.
 

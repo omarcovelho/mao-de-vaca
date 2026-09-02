@@ -1,19 +1,20 @@
 # Mão de Vaca — MVP Epic Roadmap (vertical slices)
 
 **Status:** Rascunho para planejamento de implementação  
-**Última atualização:** 2026-09-01  
+**Última atualização:** 2026-09-02  
 **Fonte de verdade do produto:** [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD) (especialmente §3, §5 e §6)  
 **Fonte de verdade da arquitetura:** [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 Épicos são **verticais**: cada um entrega um **resultado demonstrável** através de `src/server/` e `src/ui/`, adicionando apenas a persistência, endpoints e telas necessários para aquele recorte. Evitar concluir “todo o backend” ou “toda a UI” antes de qualquer fluxo funcionar ponta a ponta.
 
-**Ordem de domínio (não negociável no MVP):** autenticação → **cadastro de contas/cartões** → importação → lançamentos/faturas → relatórios.
+**Ordem de domínio (não negociável no MVP):** autenticação → **cadastro de contas/cartões** → **cadastro de categorias** → importação → lançamentos/faturas → relatórios.
 
 ```mermaid
 flowchart LR
   V0[V0_Platform]
   V1[V1_Auth]
   V2[V2_Accounts]
+  V25[V2_5_Categories]
   V3[V3_ImportConta]
   V4[V4_FaturasImport]
   V5[V5_Lancamentos]
@@ -22,7 +23,7 @@ flowchart LR
   V8[V8_CompraPai]
   V9[V9_PilotReady]
 
-  V0 --> V1 --> V2 --> V3 --> V4
+  V0 --> V1 --> V2 --> V25 --> V3 --> V4
   V4 --> V5 --> V6 --> V7
   V5 --> V8
   V6 --> V9
@@ -30,7 +31,7 @@ flowchart LR
   V8 --> V9
 ```
 
-Após **V4**, o usuário consegue importar extrato de conta e fatura de cartão. **V5–V6** completam a leitura dos lançamentos nos dois regimes. **V7** fecha o dashboard. **V8** (compra-pai) pode ser desenvolvido em paralelo após V5. **V9** consolida deploy local e checklist de uso pessoal.
+Após **V2.5**, o módulo de categorias existe antes de qualquer importação. Após **V4**, o usuário consegue importar extrato de conta e fatura de cartão. **V5–V6** completam a leitura dos lançamentos nos dois regimes. **V7** fecha o dashboard. **V8** (compra-pai) pode ser desenvolvido em paralelo após V5. **V9** consolida deploy local e checklist de uso pessoal.
 
 ---
 
@@ -38,7 +39,7 @@ Após **V4**, o usuário consegue importar extrato de conta e fatura de cartão.
 
 | Horizontal (evitar) | Vertical (este plano) |
 |---------------------|------------------------|
-| “Criar todas as entidades Prisma” | Persistir **Conta + Cartão** quando V2 entrega cadastro |
+| “Criar todas as entidades Prisma” | Persistir **Conta + Cartão** quando V2 entrega cadastro; **Category** quando V2.5 entrega categorias |
 | “Implementar todos os parsers” | Entregar **parser padrão** no modo que o épico exige (V3 ou V4) |
 | “Construir todas as telas” | Entregar **telas do fluxo** que o épico demonstra |
 | “Polir português no final” | **Copy PT** na tela que o épico introduz |
@@ -119,7 +120,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Depende de:** V1.
 
-**Milestone:** **Setup completo** — pré-requisito de qualquer importação.
+**Milestone:** **Setup de origens** — pré-requisito de qualquer importação (contas/cartões).
 
 | Fase | Resumo |
 |------|--------|
@@ -130,26 +131,58 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 ---
 
-## V3 — Import conta slice: extrato → lançamentos na conta
+## V2.5 — Categories slice: cadastro de categorias (antes da importação)
 
-**Branch sugerida:** `feature/v3-import-conta`
+**Branch sugerida:** `feature/v2-5-categories`
 
-**Resultado para o usuário:** Importa CSV no modo **transações**, seleciona **Conta** cadastrada e parser **Padrão**; vê resumo (novos, ignorados, erros) e histórico; lançamentos aparecem vinculados à conta.
+**Resultado para o usuário:** Gerencia categorias em `/categorias` (criar, listar, editar, desativar); após login com lista vazia, é orientado a cadastrar categorias (recomendado, não bloqueia importação).
 
 **Entregas verticais:**
 
 | Camada | Escopo |
 |--------|--------|
-| **`src/server/modules/import/`** | `POST /api/imports` (modo `transactions`); parser padrão → modelo canônico; deduplicação (RF-04); `ImportBatch`; persistência em `Transaction` com `accountId` |
+| **`src/server/modules/categories/`** | CRUD `Category`; unicidade de `name` por `userId`; desativação (`active: false`); filtro `userId` |
+| **`src/ui/modules/categories/`** | Tela `/categorias`; formulários; CTA no onboarding quando `setup/status.hasCategories` false |
+| **`prisma/`** | `Category` com `userId` |
+| **`src/server/modules/accounts/`** | `GET /api/setup/status` passa a incluir `hasCategories` |
+
+**Demo:** Cadastrar "Alimentação", "Transporte", "Moradia" → listar → desativar uma → `setup/status.hasCategories` true.
+
+**Mapeia para:** RF-00i–k; RN-11, RN-13; PROJECT_DEFINITION §3.6.
+
+**Depende de:** V1.
+
+**Milestone:** **Categorias disponíveis** — pré-requisito do épico de importação (V3).
+
+| Fase | Resumo |
+|------|--------|
+| A Persistence | Prisma Category |
+| B API | CRUD categorias + hasCategories em setup/status |
+| C UI | Listagem, formulário, sugestão no onboarding |
+| D Sign-off | Demo CRUD + testes de unicidade e desativação |
+
+---
+
+## V3 — Import conta slice: extrato → lançamentos na conta
+
+**Branch sugerida:** `feature/v3-import-conta`
+
+**Resultado para o usuário:** Importa CSV no modo **transações**, seleciona **Conta** cadastrada e parser **Padrão**; na pré-visualização, mapeia categorias desconhecidas; confirma e vê resumo (novos, ignorados, erros) e histórico; lançamentos aparecem vinculados à conta e à categoria.
+
+**Entregas verticais:**
+
+| Camada | Escopo |
+|--------|--------|
+| **`src/server/modules/import/`** | `POST /api/imports/preview` + `POST /api/imports/confirm` (modo `transactions`); parser padrão → modelo canônico; resolução `category` → `categoryId`; deduplicação (RF-04); `ImportBatch`; persistência em `Transaction` com `accountId` + `categoryId` |
 | **`src/server/modules/transactions/`** | Persistência mínima (ainda sem UI de listagem completa) |
-| **`src/ui/modules/import/`** | Formulário modo transações + conta + parser + upload; loading; resumo; histórico |
-| **`prisma/`** | `Transaction`, `ImportBatch`; `dedupKey` |
+| **`src/ui/modules/import/`** | Formulário modo transações + conta + parser + upload; **pré-visualização com mapeamento de categorias**; confirmação; loading; resumo; histórico |
+| **`prisma/`** | `Transaction` (`categoryId`), `ImportBatch`; `dedupKey` |
 
-**Demo:** Upload CSV de extrato → “12 criados, 0 ignorados” → consulta API confirma lançamentos com `accountId` e `competenceDate` = `cashDate` para débito.
+**Demo:** Upload CSV de extrato → mapear categoria nova "Lazer" → confirmar → “12 criados, 0 ignorados” → consulta API confirma lançamentos com `accountId`, `categoryId` e `competenceDate` = `cashDate` para débito.
 
-**Mapeia para:** RF-01, RF-02a/b/d, RF-03–05, RF-06–07; RN-08.
+**Mapeia para:** RF-01, RF-02a/b/d/e, RF-03–05, RF-06–07; RN-08, RN-12.
 
-**Depende de:** V2 (conta cadastrada).
+**Depende de:** V2 (conta cadastrada), **V2.5 (módulo de categorias)**.
 
 **Notas:** Regime de caixa = competência para lançamentos de conta neste épico. Parser padrão pode ser CSV genérico documentado com exemplo em `docs/fixtures/`.
 
@@ -159,22 +192,22 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Branch sugerida:** `feature/v4-faturas-import`
 
-**Resultado para o usuário:** Cria **Fatura** para um cartão (mês referência, vencimento); importa CSV no modo **fatura** selecionando cartão + fatura + parser; compras/estornos entram na fatura; saldo e status derivados na listagem.
+**Resultado para o usuário:** Cria **Fatura** para um cartão (mês referência, vencimento); importa CSV no modo **fatura** selecionando cartão + fatura + parser; na pré-visualização, mapeia categorias; compras/estornos entram na fatura; saldo e status derivados na listagem.
 
 **Entregas verticais:**
 
 | Camada | Escopo |
 |--------|--------|
 | **`src/server/modules/invoices/`** | `Invoice` (FK `cardId`); saldo/status derivados; `GET /api/cards/:id/invoices`, `POST` criar fatura |
-| **`src/server/modules/import/`** | Modo `invoice` em `POST /api/imports` (`cardId` + `invoiceId`); lançamentos com `cardId`; estornos reduzem saldo |
+| **`src/server/modules/import/`** | Modo `invoice` em preview/confirm (`cardId` + `invoiceId`); lançamentos com `cardId` + `categoryId`; estornos reduzem saldo |
 | **`src/ui/modules/invoices/`** | Listar/criar faturas por cartão |
-| **`src/ui/modules/import/`** | Formulário modo fatura (cartão + fatura + parser + upload) |
+| **`src/ui/modules/import/`** | Formulário modo fatura (cartão + fatura + parser + upload + mapeamento de categorias) |
 
-**Demo:** Criar fatura Jan/2026 do cartão → importar CSV da fatura → saldo derivado correto; status “em aberto”.
+**Demo:** Criar fatura Jan/2026 do cartão → importar CSV da fatura → mapear categorias → saldo derivado correto; status “em aberto”.
 
-**Mapeia para:** RF-02c, RF-10–11, RF-14; RN-10; PROJECT_DEFINITION §3.7.
+**Mapeia para:** RF-02c/e, RF-10–11, RF-14; RN-10, RN-12; PROJECT_DEFINITION §3.8.
 
-**Depende de:** V2 (cartão), V3 (import pipeline base).
+**Depende de:** V2 (cartão), V3 (import pipeline preview/confirm), V2.5 (categorias).
 
 **Milestone:** **Importação completa** (conta + cartão).
 
@@ -282,7 +315,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | **`docs/`** | `docs/fixtures/` com CSVs exemplo; checklist de piloto em 1 página |
 | **QA** | Reimportação (dedup); pagamento parcial; cross-bank (conta A paga cartão B) |
 
-**Demo:** Fluxo completo em máquina limpa: login → cadastro → import extrato → import fatura → vincular pagamento → dashboard competência e caixa.
+**Demo:** Fluxo completo em máquina limpa: login → cadastro contas/cartões → cadastro categorias → import extrato → import fatura → vincular pagamento → dashboard competência e caixa.
 
 **Mapeia para:** metas não-funcionais ARCHITECTURE §10; produto §4.1 integral.
 
@@ -299,7 +332,8 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | **Boot** | V0 | Health + shell SPA |
 | **Acesso** | V1 | Login/logout |
 | **Setup** | V2 | Cadastrar conta e cartão; onboarding |
-| **Extrato** | V3 | Importar CSV na conta |
+| **Categorias** | V2.5 | Cadastrar categorias; módulo pronto antes da importação |
+| **Extrato** | V3 | Importar CSV na conta (preview + mapeamento) |
 | **Cartão** | V4 | Fatura + import CSV de fatura |
 | **Visão** | V5 | Tabela + toggle de regime |
 | **Caixa cartão** | V6 | Vincular pagamento; regimes completos |
@@ -340,6 +374,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | Plugin Vite no NestJS vs proxy em dev | V0 |
 | Estratégia de `dedupKey` | V3 |
 | Formato do parser padrão (colunas CSV) | V3 |
+| Resolução `categoryMappings` na confirmação | V3 |
 | Biblioteca de gráficos | V7 |
 | `dedupKey` inclui `accountId`/`cardId`? | V3 |
 
@@ -362,3 +397,4 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | Data | Alteração |
 |------|-----------|
 | 2026-09-01 | Versão inicial: épicos verticais V0–V9 alinhados a cadastro-first e regimes competência/caixa |
+| 2026-09-02 | V2.5 Categories: cadastro de categorias antes da importação; V3/V4 com preview/mapeamento |
