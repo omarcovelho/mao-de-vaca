@@ -29,36 +29,47 @@ export function LoginPage() {
   }
 
   return (
-    <section className="login">
-      <h1>Entrar</h1>
-      <p>Acesse com o usuário provisionado do MVP.</p>
-      <form onSubmit={handleSubmit} className="login-form">
-        <label>
-          Usuário
-          <input
-            name="username"
-            autoComplete="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Senha
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        {error ? <p role="alert">{error}</p> : null}
-        <button type="submit" disabled={submitting}>
-          {submitting ? 'Entrando…' : 'Entrar'}
-        </button>
-      </form>
-    </section>
+    <div className="login-page">
+      <div className="login-page__inner">
+        <div className="login-page__brand">
+          <h1 className="login-page__brand-title">Mão de Vaca</h1>
+          <p className="login-page__brand-tagline">Seu controle financeiro pessoal</p>
+        </div>
+        <div className="login-card">
+          <h2 className="login-card__title">Entrar</h2>
+          <form onSubmit={handleSubmit} className="form-stack">
+            <label>
+              Usuário
+              <input
+                name="username"
+                autoComplete="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Senha
+              <input
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+            </label>
+            {error ? <p role="alert">{error}</p> : null}
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={submitting}
+            >
+              {submitting ? 'Entrando…' : 'Entrar'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
   );
 }

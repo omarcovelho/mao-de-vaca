@@ -17,6 +17,7 @@ export function BankFields({
   const [newBankName, setNewBankName] = useState('');
   const [creatingBank, setCreatingBank] = useState(false);
   const [loadingBanks, setLoadingBanks] = useState(true);
+  const [showNewBank, setShowNewBank] = useState(false);
 
   async function loadBanks(selectId?: string) {
     setLoadingBanks(true);
@@ -54,6 +55,7 @@ export function BankFields({
     try {
       const created = await accountsApi.createBank(name);
       setNewBankName('');
+      setShowNewBank(false);
       await loadBanks(created.id);
     } catch (error) {
       onError(
@@ -87,24 +89,48 @@ export function BankFields({
         </select>
       </label>
 
-      <div className="new-bank">
-        <label>
-          Cadastrar banco
-          <input
-            name="newBankName"
-            value={newBankName}
-            onChange={(event) => setNewBankName(event.target.value)}
-            placeholder="Nome do banco"
-          />
-        </label>
+      {showNewBank ? (
+        <div className="new-bank">
+          <label>
+            Nome do banco
+            <input
+              name="newBankName"
+              value={newBankName}
+              onChange={(event) => setNewBankName(event.target.value)}
+              placeholder="Nome do banco"
+            />
+          </label>
+          <div className="new-bank__actions">
+            <button
+              type="button"
+              className="btn btn--secondary"
+              onClick={(event) => void handleCreateBank(event)}
+              disabled={creatingBank || !newBankName.trim()}
+            >
+              {creatingBank ? 'Cadastrando…' : 'Cadastrar banco'}
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                setShowNewBank(false);
+                setNewBankName('');
+                onError(null);
+              }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
         <button
           type="button"
-          onClick={(event) => void handleCreateBank(event)}
-          disabled={creatingBank || !newBankName.trim()}
+          className="btn btn--secondary bank-fields__add-bank"
+          onClick={() => setShowNewBank(true)}
         >
-          {creatingBank ? 'Cadastrando…' : 'Cadastrar banco'}
+          Cadastrar novo banco
         </button>
-      </div>
+      )}
     </div>
   );
 }

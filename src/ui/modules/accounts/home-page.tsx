@@ -1,66 +1,78 @@
-import { useEffect, useState } from 'react';
-import * as accountsApi from './api';
-import { OnboardingPrompt } from './onboarding-prompt';
-
-const SKIP_KEY = 'mdv_onboarding_skipped';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { formatCurrentMonthLabel } from '../../components/format-month';
+import { PageHeader } from '../../components/page-header';
+import { RegimeToggle, type Regime } from '../../components/regime-toggle';
+import { OnboardingContinue } from './onboarding-continue';
+import { OnboardingSetupHeader } from './onboarding-setup-header';
+import { SetupPrompt } from './setup-prompt';
+import { useSetupStatus } from './setup-status-context';
 
 export function HomePage() {
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadStatus() {
-      try {
-        const skipped = sessionStorage.getItem(SKIP_KEY) === '1';
-        const status = await accountsApi.getSetupStatus();
-        if (!cancelled) {
-          setShowOnboarding(
-            !skipped && !status.hasAccounts && !status.hasCards,
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setShowOnboarding(false);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadStatus();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function handleSkip() {
-    sessionStorage.setItem(SKIP_KEY, '1');
-    setShowOnboarding(false);
-  }
+  const { loading, hasOrigins, isOnboardingComplete } = useSetupStatus();
+  const [regime, setRegime] = useState<Regime>('competence');
 
   if (loading) {
     return (
-      <section className="home">
-        <p>Carregando…</p>
+      <section className="page">
+        <p className="page__empty">Carregando…</p>
       </section>
     );
   }
 
-  if (showOnboarding) {
-    return <OnboardingPrompt onSkip={handleSkip} />;
+  if (!isOnboardingComplete) {
+    if (!hasOrigins) {
+      return <SetupPrompt />;
+    }
+
+    return (
+      <section className="page onboarding">
+        <OnboardingSetupHeader />
+        <OnboardingContinue message="Adicione mais contas ou cartões, ou finalize quando estiver pronto." />
+      </section>
+    );
   }
 
+  const regimeLabel =
+    regime === 'competence'
+      ? 'Gastos no mês · competência'
+      : 'Saídas no mês · caixa';
+
   return (
-    <section className="home">
-      <h1>Bem-vindo</h1>
-      <p>
-        Gerencie suas contas e cartões pelo menu. Em breve você poderá importar
-        extratos.
-      </p>
+    <section className="page">
+      <PageHeader
+        title={formatCurrentMonthLabel()}
+        subtitle="Resumo do mês"
+        trailing={<RegimeToggle value={regime} onChange={setRegime} />}
+      />
+
+      <div className="hero-metric">
+        <p className="hero-metric__value">—</p>
+        <p className="hero-metric__label">{regimeLabel}</p>
+      </div>
+
+      <section className="section" aria-labelledby="categories-heading">
+        <div className="section__header">
+          <h2 id="categories-heading" className="section__title">
+            Por categoria
+          </h2>
+        </div>
+        <p className="page__empty">
+          Importe extratos para ver a distribuição por categoria.
+        </p>
+      </section>
+
+      <section className="section" aria-labelledby="recent-heading">
+        <div className="section__header">
+          <h2 id="recent-heading" className="section__title">
+            Recentes
+          </h2>
+          <Link to="/lancamentos" className="btn btn--ghost">
+            Ver todos
+          </Link>
+        </div>
+        <p className="page__empty">Nenhum lançamento importado ainda.</p>
+      </section>
     </section>
   );
 }
