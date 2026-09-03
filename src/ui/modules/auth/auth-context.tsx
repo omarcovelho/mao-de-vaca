@@ -2,12 +2,14 @@ import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import * as authApi from './api';
 import { AuthContext } from './auth-context-value';
 import type { AuthUser, LoginCredentials } from './types';
+import { clearOnboardingSession } from '../accounts/onboarding-session';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const clearSession = useCallback(() => {
+    clearOnboardingSession();
     setUser(null);
   }, []);
 
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await authApi.logout();
+    clearOnboardingSession();
     setUser(null);
   }, []);
 

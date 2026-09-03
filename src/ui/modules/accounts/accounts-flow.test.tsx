@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../auth/auth-context';
+import { LoginPage } from '../auth/login-page';
 import { ProtectedRoute } from '../auth/protected-route';
 import { AppShell } from '../../components/app-shell';
 import { AccountsPage } from './accounts-page';
@@ -105,6 +106,111 @@ describe('Accounts UI flow', () => {
       screen.queryByRole('heading', { name: 'Vamos começar' }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Navegação principal' })).toBeInTheDocument();
+  });
+
+  it('shows onboarding for a user without origins even if a prior session finalized', async () => {
+    sessionStorage.setItem('mdv_onboarding_finalized', '1');
+
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u2', username: 'marco' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json({
+          hasAccounts: false,
+          hasCards: false,
+          hasCategories: false,
+          readyForImport: false,
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderApp('/');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Vamos começar' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Navegação principal' }),
+    ).not.toBeInTheDocument();
+    expect(sessionStorage.getItem('mdv_onboarding_finalized')).toBeNull();
+  });
+
+  it('shows onboarding after logout from a configured user and login as empty user', async () => {
+    const user = userEvent.setup();
+    let currentUser: { id: string; username: string } | null = {
+      id: 'u1',
+      username: 'mao',
+    };
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        if (!currentUser) {
+          return new Response(null, { status: 401 });
+        }
+        return Response.json(currentUser);
+      }
+      if (url.includes('/api/auth/logout') && init?.method === 'POST') {
+        currentUser = null;
+        return new Response(null, { status: 204 });
+      }
+      if (url.includes('/api/auth/login') && init?.method === 'POST') {
+        currentUser = { id: 'u2', username: 'marco' };
+        return Response.json(currentUser);
+      }
+      if (url.includes('/api/setup/status')) {
+        if (currentUser?.username === 'mao') {
+          return Response.json({
+            hasAccounts: true,
+            hasCards: true,
+            hasCategories: false,
+            readyForImport: true,
+          });
+        }
+        return Response.json({
+          hasAccounts: false,
+          hasCards: false,
+          hasCategories: false,
+          readyForImport: false,
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <SetupStatusProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route path="/" element={<HomePage />} />
+                </Route>
+              </Route>
+            </Routes>
+          </SetupStatusProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: /setembro de 2026/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Sair' }));
+    await screen.findByRole('heading', { name: 'Entrar' });
+
+    await user.type(screen.getByLabelText('Usuário'), 'marco');
+    await user.type(screen.getByLabelText('Senha'), 'secret');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Vamos começar' }),
+    ).toBeInTheDocument();
   });
 
   it('lets user switch between account and card setup', async () => {

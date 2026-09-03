@@ -7,8 +7,10 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useAuth } from '../auth/use-auth';
 import * as accountsApi from './api';
 import {
+  clearOnboardingSession,
   isOnboardingFinalized,
   isOnboardingStarted,
   markOnboardingFinalized,
@@ -28,34 +30,60 @@ type SetupStatusContextValue = {
 
 const SetupStatusContext = createContext<SetupStatusContextValue | null>(null);
 
+function syncOnboardingComplete(status: SetupStatus): boolean {
+  const hasOrigins = Boolean(status.hasAccounts || status.hasCards);
+
+  if (!hasOrigins) {
+    clearOnboardingSession();
+    return false;
+  }
+
+  if (isOnboardingFinalized()) {
+    return true;
+  }
+
+  if (isOnboardingStarted()) {
+    return false;
+  }
+
+  markOnboardingFinalized();
+  return true;
+}
+
 export function SetupStatusProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOnboardingComplete, setIsOnboardingComplete] = useState(
-    isOnboardingFinalized,
-  );
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
       const next = await accountsApi.getSetupStatus();
       setStatus(next);
-
-      const hasOrigins = Boolean(next.hasAccounts || next.hasCards);
-      if (hasOrigins && !isOnboardingStarted() && !isOnboardingFinalized()) {
-        markOnboardingFinalized();
-        setIsOnboardingComplete(true);
-      }
+      setIsOnboardingComplete(syncOnboardingComplete(next));
     } catch {
       setStatus(null);
+      setIsOnboardingComplete(false);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!user) {
+      setStatus(null);
+      setIsOnboardingComplete(false);
+      setLoading(false);
+      return;
+    }
+
     void reload();
-  }, [reload]);
+  }, [authLoading, user, reload]);
 
   const startOnboarding = useCallback(() => {
     markOnboardingStarted();
@@ -70,7 +98,7 @@ export function SetupStatusProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       status,
-      loading,
+      loading: authLoading || loading,
       hasOrigins: Boolean(status?.hasAccounts || status?.hasCards),
       isOnboardingComplete,
       reload,
@@ -79,6 +107,7 @@ export function SetupStatusProvider({ children }: { children: ReactNode }) {
     }),
     [
       status,
+      authLoading,
       loading,
       isOnboardingComplete,
       reload,
