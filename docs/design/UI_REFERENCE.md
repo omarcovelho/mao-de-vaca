@@ -120,4 +120,4 @@ Status de fatura derivados do domínio: aberta, parcial, quitada (RN do saldo = 
 
 ## Relação com a UI atual
 
-A implementação em `src/ui/` ainda usa header horizontal e telas separadas para contas/cartões. Ao evoluir a UI, migrar gradualmente para este layout — começando pelo shell (sidebar) e tokens CSS, depois tela a tela conforme os épicos forem entregando dados (V5 lançamentos, V7 dashboard/relatórios).
+A implementação em `src/ui/` usa sidebar + tokens CSS. Conta-only até V4/V6: Visão geral e Relatórios (V7) cobrem indicadores de conta; faturas/cartão na UI de cartões ficam para épicos posteriores.

@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/app-shell';
-import { ComingSoonPage } from './components/coming-soon-page';
 import { RequiresOrigins } from './components/requires-origins';
 import { AccountsPage } from './modules/accounts/accounts-page';
 import { CardsPage } from './modules/accounts/cards-page';
@@ -9,6 +8,7 @@ import { LoginPage } from './modules/auth/login-page';
 import { ProtectedRoute } from './modules/auth/protected-route';
 import { CategoriesPage } from './modules/categories/categories-page';
 import { ImportPage } from './modules/import/import-page';
+import { ReportsPage } from './modules/reports/reports-page';
 import { TransactionsPage } from './modules/transactions/transactions-page';
 
 export function AppRouter() {
@@ -24,16 +24,7 @@ export function AppRouter() {
           <Route element={<RequiresOrigins />}>
             <Route path="/lancamentos" element={<TransactionsPage />} />
             <Route path="/importar" element={<ImportPage />} />
-            <Route
-              path="/relatorios"
-              element={
-                <ComingSoonPage
-                  title="Relatórios"
-                  subtitle="Evolução dos últimos meses"
-                  message="Gráficos e indicadores estarão disponíveis após os lançamentos serem importados."
-                />
-              }
-            />
+            <Route path="/relatorios" element={<ReportsPage />} />
           </Route>
         </Route>
       </Route>

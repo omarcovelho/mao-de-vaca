@@ -444,8 +444,8 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 ### Relatórios
 
 - `GET /api/reports/summary?regime=&from=&to=` — totais gasto/receita/saldo (RF-19)
-- `GET /api/reports/by-category?regime=&from=&to=` — quebra por categoria (RF-20)
-- `GET /api/reports/monthly-evolution?regime=` — evolução mensal (RF-21)
+- `GET /api/reports/by-category?regime=&from=&to=` — árvore de gastos por categoria (raízes com `children`; totais agregados nos pais) (RF-20)
+- `GET /api/reports/monthly-evolution?regime=&months=&endMonth=` — evolução mensal (RF-21); `months` default 6, `endMonth` default mês corrente (`YYYY-MM`)
 
 ### Health
 

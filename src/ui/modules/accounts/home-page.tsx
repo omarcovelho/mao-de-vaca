@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { PageHeader } from '../../components/page-header';
 import { RegimeToggle } from '../../components/regime-toggle';
 import { CategoriesSetupBanner } from '../categories/categories-setup-banner';
+import * as reportsApi from '../reports/api';
+import { CategoryBreakdown } from '../reports/category-breakdown';
+import type { ByCategoryItem } from '../reports/types';
 import * as transactionsApi from '../transactions/api';
 import { formatMonthLabel, monthBounds, toMonthKey } from '../transactions/month';
 import { useRegime } from '../transactions/regime-context';
@@ -21,12 +24,22 @@ function formatAmount(amount: number, type: TransactionItem['type']): string {
   });
 }
 
+function formatMoney(value: number): string {
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
 export function HomePage() {
   const { loading, hasOrigins, isOnboardingComplete, status } =
     useSetupStatus();
   const { regime, setRegime } = useRegime();
   const [recent, setRecent] = useState<TransactionItem[]>([]);
   const [recentLoading, setRecentLoading] = useState(false);
+  const [expenseTotal, setExpenseTotal] = useState<number | null>(null);
+  const [categories, setCategories] = useState<ByCategoryItem[]>([]);
+  const [metricsLoading, setMetricsLoading] = useState(false);
   const month = toMonthKey();
 
   useEffect(() => {
@@ -36,23 +49,41 @@ export function HomePage() {
     let cancelled = false;
     void (async () => {
       setRecentLoading(true);
+      setMetricsLoading(true);
       try {
         const bounds = monthBounds(month);
-        const response = await transactionsApi.listTransactions({
-          regime,
-          from: bounds.from,
-          to: bounds.to,
-        });
+        const [txResponse, summary, byCategory] = await Promise.all([
+          transactionsApi.listTransactions({
+            regime,
+            from: bounds.from,
+            to: bounds.to,
+          }),
+          reportsApi.fetchSummary({
+            regime,
+            from: bounds.from,
+            to: bounds.to,
+          }),
+          reportsApi.fetchByCategory({
+            regime,
+            from: bounds.from,
+            to: bounds.to,
+          }),
+        ]);
         if (!cancelled) {
-          setRecent(response.items.slice(0, 3));
+          setRecent(txResponse.items.slice(0, 3));
+          setExpenseTotal(summary.expenseTotal);
+          setCategories(byCategory.items);
         }
       } catch {
         if (!cancelled) {
           setRecent([]);
+          setExpenseTotal(null);
+          setCategories([]);
         }
       } finally {
         if (!cancelled) {
           setRecentLoading(false);
+          setMetricsLoading(false);
         }
       }
     })();
@@ -99,7 +130,13 @@ export function HomePage() {
       />
 
       <div className="hero-metric">
-        <p className="hero-metric__value">—</p>
+        <p className="hero-metric__value">
+          {metricsLoading
+            ? '…'
+            : expenseTotal === null
+              ? '—'
+              : formatMoney(expenseTotal)}
+        </p>
         <p className="hero-metric__label">{regimeLabel}</p>
       </div>
 
@@ -108,10 +145,15 @@ export function HomePage() {
           <h2 id="categories-heading" className="section__title">
             Por categoria
           </h2>
+          <Link to="/relatorios" className="btn btn--ghost">
+            Ver relatórios
+          </Link>
         </div>
-        <p className="page__empty">
-          Importe extratos para ver a distribuição por categoria.
-        </p>
+        {metricsLoading ? (
+          <p className="page__empty">Carregando…</p>
+        ) : (
+          <CategoryBreakdown items={categories} limit={3} />
+        )}
       </section>
 
       <section className="section" aria-labelledby="recent-heading">

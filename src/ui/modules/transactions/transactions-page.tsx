@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/page-header';
 import { RegimeToggle } from '../../components/regime-toggle';
 import { listAccounts } from '../accounts/api';
@@ -9,6 +10,8 @@ import * as transactionsApi from './api';
 import { formatMonthLabel, monthBounds, shiftMonth, toMonthKey } from './month';
 import { useRegime } from './regime-context';
 import type { TransactionItem } from './types';
+
+const MONTH_RE = /^\d{4}-\d{2}$/;
 
 function flattenLeaves(nodes: Category[]): Category[] {
   const leaves: Category[] = [];
@@ -39,12 +42,23 @@ function formatDay(isoDate: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
+function initialMonth(searchParams: URLSearchParams): string {
+  const fromQuery = searchParams.get('month');
+  if (fromQuery && MONTH_RE.test(fromQuery)) {
+    return fromQuery;
+  }
+  return toMonthKey();
+}
+
 export function TransactionsPage() {
   const { regime, setRegime } = useRegime();
-  const [month, setMonth] = useState(() => toMonthKey());
+  const [searchParams] = useSearchParams();
+  const [month, setMonth] = useState(() => initialMonth(searchParams));
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(
+    () => searchParams.get('categoryId') ?? '',
+  );
   const [accountId, setAccountId] = useState('');
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [accounts, setAccounts] = useState<Origin[]>([]);
@@ -53,6 +67,19 @@ export function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const nextMonth = searchParams.get('month');
+    if (nextMonth && MONTH_RE.test(nextMonth)) {
+      setMonth(nextMonth);
+      setCustomFrom('');
+      setCustomTo('');
+    }
+    const nextCategory = searchParams.get('categoryId');
+    if (nextCategory !== null) {
+      setCategoryId(nextCategory);
+    }
+  }, [searchParams]);
 
   const period = useMemo(() => {
     if (customFrom && customTo) {

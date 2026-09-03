@@ -194,6 +194,209 @@ a {
   font-size: 0.8125rem;
 }
 
+.page__error {
+  margin: 0 0 1rem;
+  color: var(--danger, #9b2226);
+  font-size: 0.875rem;
+}
+
+.category-swatch--sm {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.75rem;
+}
+
+.category-breakdown {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.category-breakdown--nested {
+  margin-top: 0.75rem;
+  gap: 0.65rem;
+}
+
+.category-breakdown__row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.category-breakdown__toggle {
+  font: inherit;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.category-breakdown__toggle:hover {
+  color: var(--text);
+}
+
+.category-breakdown__toggle--spacer {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.category-breakdown__meta {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.category-breakdown__name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-breakdown__name--link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.category-breakdown__name--link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.category-breakdown__percent {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.category-breakdown__total {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-breakdown__bar {
+  height: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border-strong) 55%, transparent);
+  overflow: hidden;
+}
+
+.category-breakdown__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  min-width: 0;
+}
+
+.report-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0 0 2rem;
+}
+
+.report-stats--secondary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.report-stat {
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.report-stat__label {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.report-stat__value {
+  margin: 0.35rem 0 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.report-stat__hint {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.monthly-chart {
+  margin-top: 0.5rem;
+}
+
+.monthly-chart__bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: end;
+  min-height: 12rem;
+}
+
+.monthly-chart__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.monthly-chart__value {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.2;
+  min-height: 1.6em;
+}
+
+.monthly-chart__track {
+  width: 100%;
+  max-width: 2.5rem;
+  height: 8rem;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 0.35rem 0.35rem 0 0;
+  overflow: hidden;
+}
+
+.monthly-chart__bar {
+  display: block;
+  width: 100%;
+  background: var(--accent);
+  border-radius: 0.35rem 0.35rem 0 0;
+  min-height: 0;
+}
+
+.monthly-chart__label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+}
+
 .section {
   margin-bottom: 2rem;
 }
@@ -1074,5 +1277,21 @@ a {
   .page-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .report-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .report-stats--secondary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .monthly-chart__bars {
+    gap: 0.35rem;
+  }
+
+  .monthly-chart__value {
+    font-size: 0.625rem;
   }
 }
