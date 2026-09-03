@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CategoriesService } from '../categories/categories.service';
 import {
   BankResponse,
   CreateBankDto,
@@ -38,12 +39,16 @@ function toOriginResponse(row: OriginWithBank): OriginResponse {
 
 @Injectable()
 export class AccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   async getSetupStatus(userId: string): Promise<SetupStatus> {
-    const [accountCount, cardCount] = await Promise.all([
+    const [accountCount, cardCount, leafCount] = await Promise.all([
       this.prisma.account.count({ where: { userId, active: true } }),
       this.prisma.card.count({ where: { userId, active: true } }),
+      this.categoriesService.countActiveLeaves(userId),
     ]);
 
     const hasAccounts = accountCount > 0;
@@ -52,7 +57,7 @@ export class AccountsService {
     return {
       hasAccounts,
       hasCards,
-      hasCategories: false,
+      hasCategories: leafCount > 0,
       readyForImport: hasAccounts,
     };
   }

@@ -49,6 +49,7 @@ Para visualizar no Cursor: abra o arquivo `.canvas.tsx` na pasta `canvases/` do 
 | `/importar` | Importar | V3 / V4 |
 | `/contas` | Contas | V2 |
 | `/cartoes` | Cartões | V2 / V4 (faturas) |
+| `/categorias` | Categorias | V2.5 |
 | `/relatorios` | Relatórios | V7 |
 
 Login (`/login`) e onboarding ficam fora da sidebar.
@@ -91,6 +92,13 @@ Login (`/login`) e onboarding ficam fora da sidebar.
 - CTA “Adicionar cartão” no cabeçalho.
 
 Status de fatura derivados do domínio: aberta, parcial, quitada (RN do saldo = compras − estornos − pagamentos vinculados).
+
+### Categorias
+- Árvore **compacta e recolhível**: raízes fechadas por padrão; expandir para ver filhos.
+- Linha densa com ícone linear minimalista (cor do swatch), nome e tipo só na raiz.
+- CTA no cabeçalho: “Nova categoria”. “Nova subcategoria” na linha da categoria/subcategoria (oculto no depth 5).
+- Formulário de filha indica o pai (“Em {nome}”); nome, cor, ícone; editar nome/cor/ícone; desativar.
+- Banner soft na home quando `hasCategories` é false (recomendado; dismissível).
 
 ### Relatórios
 - 3 stats em linha (gastos do mês, maior categoria, variação %).

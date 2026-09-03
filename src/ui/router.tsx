@@ -7,6 +7,7 @@ import { CardsPage } from './modules/accounts/cards-page';
 import { HomePage } from './modules/accounts/home-page';
 import { LoginPage } from './modules/auth/login-page';
 import { ProtectedRoute } from './modules/auth/protected-route';
+import { CategoriesPage } from './modules/categories/categories-page';
 
 export function AppRouter() {
   return (
@@ -17,6 +18,7 @@ export function AppRouter() {
           <Route path="/" element={<HomePage />} />
           <Route path="/contas" element={<AccountsPage />} />
           <Route path="/cartoes" element={<CardsPage />} />
+          <Route path="/categorias" element={<CategoriesPage />} />
           <Route element={<RequiresOrigins />}>
             <Route
               path="/lancamentos"

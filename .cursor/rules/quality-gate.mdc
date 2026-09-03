@@ -23,7 +23,7 @@ alwaysApply: true
 | Área | Comportamentos críticos |
 |------|-------------------------|
 | **accounts** | CRUD, desativação, `setup/status`, bloqueio sem origem cadastrada |
-| **categories** | CRUD, desativação, unicidade de nome, `hasCategories` em setup/status |
+| **categories** | CRUD árvore (depth ≤5), cor/ícone, unicidade irmãos/folhas, desativação em cascata, `hasCategories` em setup/status |
 | **import** | Parser → modelo canônico, preview/confirm, mapeamento de categorias, dedup em reimportação, rejeição sem conta/cartão |
 | **transactions** | Tipos (despesa/receita/transferência), FK `accountId` ou `cardId`, FK `categoryId` |
 | **invoices** | Saldo derivado, status (aberta/parcial/quitada), vínculo pagamento M:N |
