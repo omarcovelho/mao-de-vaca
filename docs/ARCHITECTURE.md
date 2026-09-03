@@ -185,7 +185,7 @@ flowchart LR
 | **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas** |
-| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`, `importBatchId`, `dedupKey`. `importBatchId` identifica o lote de importação (base para um futuro **bulk delete** por importação; não implementado no V3). |
+| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId` (cartão após V4), `importBatchId`, `dedupKey`, `active` (soft-disable; listagem padrão só ativos). `importBatchId` identifica o lote de importação (base para um futuro **bulk delete** por importação; não implementado no V3). |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** |
 | **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
 | **ParentPurchase** | PostgreSQL | Agregado informacional; não entra em somas; parcelas vinculadas manualmente |
@@ -426,8 +426,8 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Lançamentos
 
-- `GET /api/transactions` — filtros: período, categoria, origem, `regime`
-- `PATCH /api/transactions/:id` — ajustes pontuais (tipo, vínculos)
+- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId`, `accountId`, `includeInactive`
+- `PATCH /api/transactions/:id` — `categoryId` (folha ativa compatível com o tipo) e/ou `active`
 
 ### Faturas
 
@@ -539,3 +539,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-01 | Versão inicial: app web único, `src/server/` + `src/ui/`, importação via UI, regimes competência/caixa |
 | 2026-09-01 | Cadastro de contas/cartões como requisito fundacional; importação por modo com parser; módulo `accounts` |
 | 2026-09-03 | V3 import conta: parser padrão (sinal → tipo), preview/confirm multipart, dedupKey, transferências em dois arquivos |
+| 2026-09-03 | V5 lançamentos: listagem mês+regime, `Transaction.active`, PATCH categoria/desativar; V5 pode seguir V3 sem V4 |

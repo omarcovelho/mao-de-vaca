@@ -9,6 +9,8 @@ import { ProtectedRoute } from '../auth/protected-route';
 import { HomePage } from '../accounts/home-page';
 import { SetupStatusProvider } from '../accounts/setup-status-context';
 import { AccountsPage } from '../accounts/accounts-page';
+import { RegimeProvider } from '../transactions/regime-context';
+import { TransactionsPage } from '../transactions/transactions-page';
 import { ImportPage } from './import-page';
 
 function renderImportApp(initialPath = '/importar') {
@@ -16,17 +18,20 @@ function renderImportApp(initialPath = '/importar') {
     <MemoryRouter initialEntries={[initialPath]}>
       <AuthProvider>
         <SetupStatusProvider>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppShell />}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/contas" element={<AccountsPage />} />
-                <Route element={<RequiresOrigins />}>
-                  <Route path="/importar" element={<ImportPage />} />
+          <RegimeProvider>
+            <Routes>
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/contas" element={<AccountsPage />} />
+                  <Route element={<RequiresOrigins />}>
+                    <Route path="/importar" element={<ImportPage />} />
+                    <Route path="/lancamentos" element={<TransactionsPage />} />
+                  </Route>
                 </Route>
               </Route>
-            </Route>
-          </Routes>
+            </Routes>
+          </RegimeProvider>
         </SetupStatusProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -189,6 +194,9 @@ describe('Import UI flow', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       '2 criados, 0 ignorados',
     );
+    expect(
+      screen.getByRole('link', { name: 'Ver lançamentos' }),
+    ).toHaveAttribute('href', '/lancamentos');
     expect(await screen.findByText('extrato.csv')).toBeInTheDocument();
 
     const confirmCall = vi

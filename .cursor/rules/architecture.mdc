@@ -40,7 +40,7 @@ Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `c
 | `server/modules/accounts/` | CRUD Conta + Cartão + Banco, setup/status |
 | `server/modules/categories/` | CRUD árvore de Categorias (`parentId`, depth ≤5, `kind`, `color`, `icon`); unicidade entre irmãos/folhas; desativação em cascata |
 | `server/modules/import/` | Preview/confirm CSV (multipart), parser padrão, mapeamento de categorias, dedup, ImportBatch |
-| `server/modules/transactions/` | Lançamentos, tipos, regimes |
+| `server/modules/transactions/` | Listagem por regime/período, PATCH categoria/active, tipos |
 | `server/modules/invoices/` | Faturas (FK cartão), saldo/status derivados, vínculo pagamento |
 | `server/modules/parent-purchases/` | Compra-pai informacional |
 | `server/modules/reports/` | Indicadores, categorias, evolução mensal por regime |

@@ -25,7 +25,7 @@ alwaysApply: true
 | **accounts** | CRUD, desativação, `setup/status`, bloqueio sem origem cadastrada |
 | **categories** | CRUD árvore (depth ≤5), cor/ícone, unicidade irmãos/folhas, desativação em cascata, `hasCategories` em setup/status |
 | **import** | Parser → modelo canônico, preview/confirm (sem persistir no preview), mapeamento de categorias, dedup em reimportação, rejeição sem conta/cartão |
-| **transactions** | Tipos (despesa/receita/transferência), FK `accountId` ou `cardId`, FK `categoryId` |
+| **transactions** | Listagem por regime/`from`/`to`, filtros opcionais, PATCH categoria folha/`active`, FK `accountId`/`categoryId` |
 | **invoices** | Saldo derivado, status (aberta/parcial/quitada), vínculo pagamento M:N |
 | **reports** | Totais por regime; transferências e compra-pai excluídas das somas |
 

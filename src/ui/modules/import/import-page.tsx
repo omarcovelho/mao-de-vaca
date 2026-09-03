@@ -443,13 +443,18 @@ export function ImportPage() {
       ) : null}
 
       {result ? (
-        <p className="status-pill status-pill--success" role="status">
-          {result.created} criados, {result.skipped} ignorados
-          {result.errors.length > 0
-            ? `, ${result.errors.length} erros`
-            : ''}
-          .
-        </p>
+        <div className="import-result" role="status">
+          <p className="status-pill status-pill--success">
+            {result.created} criados, {result.skipped} ignorados
+            {result.errors.length > 0
+              ? `, ${result.errors.length} erros`
+              : ''}
+            .
+          </p>
+          <Link to="/lancamentos" className="btn btn--secondary btn--compact">
+            Ver lançamentos
+          </Link>
+        </div>
       ) : null}
 
       <section className="section" aria-labelledby="history-heading">

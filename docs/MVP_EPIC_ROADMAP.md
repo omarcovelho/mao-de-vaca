@@ -217,21 +217,23 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Branch sugerida:** `feature/v5-lancamentos`
 
-**Resultado para o usuário:** Visualiza lançamentos em tabela com filtros (período, categoria, origem); alterna **competência ↔ caixa** globalmente; vê datas corretas por regime (cartão em caixa ainda incompleto se pagamento não vinculado — comportamento esperado).
+**Resultado para o usuário:** Visualiza lançamentos do **mês** (todas as contas) com regime **competência ↔ caixa**; filtros opcionais (categoria, conta, data de/até); altera categoria e desativa lançamento na própria lista.
 
 **Entregas verticais:**
 
 | Camada | Escopo |
 |--------|--------|
-| **`src/server/modules/transactions/`** | `GET /api/transactions?regime=&from=&to=&...`; cálculo de `cashDate` para cartão quando pagamento existir |
-| **`src/ui/`** | Toggle global de regime (context/provider); tabela em `ui/modules/transactions/` |
-| **`src/ui/modules/import/`** | Link “ver lançamentos” pós-importação |
+| **`src/server/modules/transactions/`** | `GET /api/transactions?regime=&from=&to=&...`; `PATCH` `categoryId` / `active`; `Transaction.active` |
+| **`src/ui/`** | Toggle global de regime (`RegimeProvider`); lista em `ui/modules/transactions/` |
+| **`src/ui/modules/import/`** | Link “Ver lançamentos” pós-importação |
 
-**Demo:** Importar extrato + fatura → alternar regime → competência mostra compras de cartão no mês da compra; caixa mostra só débitos de conta até V6.
+**Demo:** Importar extrato → `/lancamentos` no mês → filtrar opcionalmente → editar categoria / desativar → toggle regime.
 
-**Mapeia para:** RF-08, RF-09, RF-22; RN-06, RN-07.
+**Mapeia para:** RF-08, RF-09, RF-22; RN-06, RN-07 (caixa de cartão completo após V6).
 
-**Depende de:** V3–V4 (dados para listar).
+**Depende de:** V3 (dados de conta). **Pode rodar antes de V4** (cartão/fatura); linhas de cartão e caixa completo após V4–V6.
+
+**Spec:** [docs/epics/V5_LANCAMENTOS.md](./epics/V5_LANCAMENTOS.md).
 
 ---
 
