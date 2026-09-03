@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,6 +130,8 @@ describe('Transactions UI flow', () => {
                 kind: 'EXPENSE',
               },
               account: { id: 'acc-1', label: 'Nubank CC', bank: { id: 'b1', name: 'Nubank' } },
+              card: null,
+              invoiceId: null,
             },
           ],
         });
@@ -144,6 +146,7 @@ describe('Transactions UI flow', () => {
     const row = screen.getByText('Supermercado').closest('li');
     expect(row).toHaveTextContent('Nubank CC');
     expect(row).toHaveTextContent('Nubank');
+    expect(within(row!).getByRole('img', { name: 'Conta' })).toBeInTheDocument();
     expect(listCalls[0]).toContain(`from=${bounds.from}`);
     expect(listCalls[0]).toContain(`to=${bounds.to}`);
     expect(listCalls[0]).toContain('regime=competence');
@@ -177,6 +180,8 @@ describe('Transactions UI flow', () => {
           kind: 'EXPENSE' as const,
         },
         account: { id: 'acc-1', label: 'Nubank CC', bank: { id: 'b1', name: 'Nubank' } },
+        card: null,
+        invoiceId: null,
       },
     ];
 
@@ -313,5 +318,72 @@ describe('Transactions UI flow', () => {
       expect(listCalls.at(-1)).toContain('accountId=acc-2');
     });
     expect(listCalls[0]).not.toContain('accountId=');
+  });
+
+  it('shows Cartão origin for card purchases', async () => {
+    const month = toMonthKey();
+    const bounds = monthBounds(month);
+
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/accounts')) {
+        return Response.json([]);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([foodLeaf]);
+      }
+      if (url.includes('/api/transactions')) {
+        return Response.json({
+          regime: 'competence',
+          from: bounds.from,
+          to: bounds.to,
+          items: [
+            {
+              id: 'tx-card',
+              description: 'Pao de Acucar',
+              amount: -120,
+              type: 'EXPENSE',
+              competenceDate: `${month}-15`,
+              cashDate: null,
+              displayDate: `${month}-15`,
+              active: true,
+              category: {
+                id: 'food',
+                name: 'Alimentação',
+                color: '#2d6a4f',
+                icon: 'utensils',
+                kind: 'EXPENSE',
+              },
+              account: null,
+              card: {
+                id: 'card-1',
+                label: 'Nubank Roxinho',
+                bank: { id: 'b1', name: 'Nubank' },
+              },
+              invoiceId: 'inv-1',
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderTransactionsApp();
+
+    expect(await screen.findByText('Pao de Acucar')).toBeInTheDocument();
+    const row = screen.getByText('Pao de Acucar').closest('li');
+    expect(row).toHaveTextContent('Nubank Roxinho');
+    expect(row).toHaveTextContent('Nubank');
+    expect(within(row!).getByRole('img', { name: 'Cartão' })).toBeInTheDocument();
+    expect(within(row!).getByRole('link')).toHaveAttribute(
+      'href',
+      '/cartoes?invoiceId=inv-1',
+    );
   });
 });

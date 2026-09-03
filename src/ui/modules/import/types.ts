@@ -7,10 +7,27 @@ export type ImportAccount = {
   active: boolean;
 };
 
+export type ImportCard = {
+  id: string;
+  label: string;
+  bank: { id: string; name: string };
+  active: boolean;
+};
+
+export type ImportInvoiceOption = {
+  id: string;
+  referenceMonth: string;
+  dueDate: string;
+  balance: number;
+  status: string;
+};
+
 export type ImportOptions = {
   modes: Array<{ id: ImportModeId; label: string; enabled: boolean }>;
   parsers: Array<{ id: string; label: string }>;
   accounts: ImportAccount[];
+  cards: ImportCard[];
+  invoicesByCard: Record<string, ImportInvoiceOption[]>;
 };
 
 export type PreviewRow = {
@@ -51,6 +68,10 @@ export type ImportHistoryItem = {
   fileName: string;
   accountId: string | null;
   accountLabel: string | null;
+  cardId?: string | null;
+  cardLabel?: string | null;
+  invoiceId?: string | null;
+  invoiceReferenceMonth?: string | null;
   createdCount: number;
   skippedCount: number;
   errorCount: number;

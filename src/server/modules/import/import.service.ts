@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { CategoriesService } from '../categories/categories.service';
 import { CategoryResponse } from '../categories/categories.types';
+import { InvoicesService } from '../invoices/invoices.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { buildDedupKey } from './dedup-key';
 import {
@@ -19,7 +20,7 @@ import {
   ImportModeApi,
   PreviewRow,
 } from './import.types';
-import type { CanonicalTransaction } from './parsers/canonical';
+import type { CanonicalTransaction, ParseMode } from './parsers/canonical';
 import { getParser, listParsers } from './parsers/parser-registry';
 
 type UploadedCsv = {
@@ -27,6 +28,17 @@ type UploadedCsv = {
   originalname: string;
   mimetype?: string;
   size: number;
+};
+
+type ParsedUpload = {
+  importMode: ImportModeApi;
+  accountId: string | null;
+  cardId: string | null;
+  invoiceId: string | null;
+  originId: string;
+  parser: NonNullable<ReturnType<typeof getParser>>;
+  parsed: ReturnType<NonNullable<ReturnType<typeof getParser>>['parse']>;
+  fileName: string;
 };
 
 function flattenLeaves(nodes: CategoryResponse[]): CategoryResponse[] {
@@ -86,17 +98,48 @@ export class ImportService {
     private readonly accountsService: AccountsService,
     private readonly categoriesService: CategoriesService,
     private readonly transactionsService: TransactionsService,
+    private readonly invoicesService: InvoicesService,
   ) {}
 
   async getOptions(userId: string) {
-    const accounts = await this.accountsService.listAccounts(userId, false);
+    const [accounts, cards] = await Promise.all([
+      this.accountsService.listAccounts(userId, false),
+      this.accountsService.listCards(userId, false),
+    ]);
+
+    const invoicesByCard: Record<
+      string,
+      Array<{
+        id: string;
+        referenceMonth: string;
+        dueDate: string;
+        balance: number;
+        status: string;
+      }>
+    > = {};
+
+    await Promise.all(
+      cards.map(async (card) => {
+        const invoices = await this.invoicesService.listByCard(userId, card.id);
+        invoicesByCard[card.id] = invoices.map((invoice) => ({
+          id: invoice.id,
+          referenceMonth: invoice.referenceMonth,
+          dueDate: invoice.dueDate,
+          balance: invoice.balance,
+          status: invoice.status,
+        }));
+      }),
+    );
+
     return {
       modes: [
         { id: 'transactions', label: 'Extrato de conta', enabled: true },
-        { id: 'invoice', label: 'Fatura de cartão', enabled: false },
+        { id: 'invoice', label: 'Fatura de cartão', enabled: true },
       ],
       parsers: listParsers(),
       accounts,
+      cards,
+      invoicesByCard,
     };
   }
 
@@ -105,24 +148,22 @@ export class ImportService {
     fields: {
       importMode?: string;
       accountId?: string;
+      cardId?: string;
+      invoiceId?: string;
       parserId?: string;
     },
     file: UploadedCsv | undefined,
   ) {
-    const { account, parser, parsed } = await this.parseUpload(
-      userId,
-      fields,
-      file,
-    );
+    const upload = await this.parseUpload(userId, fields, file);
     const tree = await this.categoriesService.list(userId, false);
     const leaves = flattenLeaves(tree);
     const unknown = new Set<string>();
-    const rows: PreviewRow[] = parsed.errors.map((error) => ({
+    const rows: PreviewRow[] = upload.parsed.errors.map((error) => ({
       line: error.line,
       error: error.message,
     }));
 
-    for (const row of parsed.transactions) {
+    for (const row of upload.parsed.transactions) {
       const match = leafByName(leaves, row.category);
       if (!match) {
         unknown.add(row.category.trim() || row.category);
@@ -130,7 +171,7 @@ export class ImportService {
       rows.push({
         line: row.line,
         competenceDate: row.competenceDate,
-        cashDate: row.cashDate,
+        cashDate: row.cashDate ?? undefined,
         description: row.description,
         amount: row.amount,
         type: row.type,
@@ -142,15 +183,17 @@ export class ImportService {
     rows.sort((a, b) => a.line - b.line);
 
     return {
-      accountId: account.id,
-      parserId: parser.id,
-      importMode: 'transactions' as const,
+      accountId: upload.accountId,
+      cardId: upload.cardId,
+      invoiceId: upload.invoiceId,
+      parserId: upload.parser.id,
+      importMode: upload.importMode,
       rows,
       unknownCategories: [...unknown],
       summary: {
-        rowCount: parsed.transactions.length + parsed.errors.length,
-        validCount: parsed.transactions.length,
-        errorCount: parsed.errors.length,
+        rowCount: upload.parsed.transactions.length + upload.parsed.errors.length,
+        validCount: upload.parsed.transactions.length,
+        errorCount: upload.parsed.errors.length,
         unknownCategoryCount: unknown.size,
       },
     };
@@ -161,23 +204,21 @@ export class ImportService {
     fields: {
       importMode?: string;
       accountId?: string;
+      cardId?: string;
+      invoiceId?: string;
       parserId?: string;
       categoryMappings?: string;
     },
     file: UploadedCsv | undefined,
   ) {
-    const { account, parser, parsed, fileName } = await this.parseUpload(
-      userId,
-      fields,
-      file,
-    );
+    const upload = await this.parseUpload(userId, fields, file);
     const mappings = parseCategoryMappings(fields.categoryMappings);
     const tree = await this.categoriesService.list(userId, false);
     const leaves = flattenLeaves(tree);
     const categoryIds = new Map<string, string>();
 
     const uniqueCsvNames = [
-      ...new Set(parsed.transactions.map((row) => row.category)),
+      ...new Set(upload.parsed.transactions.map((row) => row.category)),
     ];
 
     for (const csvName of uniqueCsvNames) {
@@ -196,13 +237,18 @@ export class ImportService {
       }
     }
 
-    const errors = parsed.errors.map((error) => ({
+    const errors = upload.parsed.errors.map((error) => ({
       line: error.line,
       message: error.message,
     }));
 
-    const keys = parsed.transactions.map((row) =>
-      buildDedupKey(account.id, row.competenceDate, row.amount, row.description),
+    const keys = upload.parsed.transactions.map((row) =>
+      buildDedupKey(
+        upload.originId,
+        row.competenceDate,
+        row.amount,
+        row.description,
+      ),
     );
     const existing = await this.transactionsService.existingDedupKeys(
       userId,
@@ -212,7 +258,7 @@ export class ImportService {
     const toCreate: Prisma.TransactionCreateManyInput[] = [];
     let skipped = 0;
 
-    parsed.transactions.forEach((row, index) => {
+    upload.parsed.transactions.forEach((row, index) => {
       const dedupKey = keys[index];
       if (existing.has(dedupKey)) {
         skipped += 1;
@@ -227,16 +273,23 @@ export class ImportService {
         });
         return;
       }
-      toCreate.push(this.toTransactionRow(userId, account.id, '', row, categoryId, dedupKey));
+      toCreate.push(
+        this.toTransactionRow(userId, upload, row, categoryId, dedupKey),
+      );
     });
 
     const batch = await this.prisma.importBatch.create({
       data: {
         userId,
-        importMode: ImportMode.TRANSACTIONS,
-        accountId: account.id,
-        parserId: parser.id,
-        fileName,
+        importMode:
+          upload.importMode === 'invoice'
+            ? ImportMode.INVOICE
+            : ImportMode.TRANSACTIONS,
+        accountId: upload.accountId,
+        cardId: upload.cardId,
+        invoiceId: upload.invoiceId,
+        parserId: upload.parser.id,
+        fileName: upload.fileName,
         createdCount: 0,
         skippedCount: skipped,
         errorCount: errors.length,
@@ -271,15 +324,26 @@ export class ImportService {
     const batches = await this.prisma.importBatch.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      include: { account: { select: { id: true, label: true } } },
+      include: {
+        account: { select: { id: true, label: true } },
+        card: { select: { id: true, label: true } },
+        invoice: { select: { id: true, referenceMonth: true } },
+      },
     });
     return batches.map((batch) => ({
       id: batch.id,
-      importMode: batch.importMode === ImportMode.TRANSACTIONS ? 'transactions' : 'invoice',
+      importMode:
+        batch.importMode === ImportMode.TRANSACTIONS ? 'transactions' : 'invoice',
       parserId: batch.parserId,
       fileName: batch.fileName,
       accountId: batch.accountId,
       accountLabel: batch.account?.label ?? null,
+      cardId: batch.cardId,
+      cardLabel: batch.card?.label ?? null,
+      invoiceId: batch.invoiceId,
+      invoiceReferenceMonth: batch.invoice
+        ? batch.invoice.referenceMonth.toISOString().slice(0, 10)
+        : null,
       createdCount: batch.createdCount,
       skippedCount: batch.skippedCount,
       errorCount: batch.errorCount,
@@ -292,20 +356,17 @@ export class ImportService {
     fields: {
       importMode?: string;
       accountId?: string;
+      cardId?: string;
+      invoiceId?: string;
       parserId?: string;
     },
     file: UploadedCsv | undefined,
-  ) {
-    const importMode = fields.importMode as ImportModeApi | undefined;
-    if (importMode && importMode !== 'transactions') {
-      throw new BadRequestException(
-        'Importação de fatura ainda não está disponível',
-      );
+  ): Promise<ParsedUpload> {
+    const importMode = (fields.importMode ?? 'transactions') as ImportModeApi;
+    if (importMode !== 'transactions' && importMode !== 'invoice') {
+      throw new BadRequestException('Modo de importação inválido');
     }
 
-    if (!fields.accountId) {
-      throw new BadRequestException('Conta é obrigatória');
-    }
     if (!fields.parserId) {
       throw new BadRequestException('Parser é obrigatório');
     }
@@ -318,23 +379,62 @@ export class ImportService {
       throw new BadRequestException('Parser desconhecido');
     }
 
-    return this.parseWithAccount(userId, fields.accountId, parser, file);
-  }
+    const parseMode: ParseMode = importMode;
+    const parsed = parser.parse(file.buffer, { mode: parseMode });
+    const fileName = file.originalname || 'extrato.csv';
 
-  private async parseWithAccount(
-    userId: string,
-    accountId: string,
-    parser: NonNullable<ReturnType<typeof getParser>>,
-    file: UploadedCsv,
-  ) {
-    const accounts = await this.accountsService.listAccounts(userId, false);
-    const account = accounts.find((item) => item.id === accountId);
-    if (!account) {
-      throw new NotFoundException('Conta não encontrada ou inativa');
+    if (importMode === 'transactions') {
+      if (!fields.accountId) {
+        throw new BadRequestException('Conta é obrigatória');
+      }
+      const accounts = await this.accountsService.listAccounts(userId, false);
+      const account = accounts.find((item) => item.id === fields.accountId);
+      if (!account) {
+        throw new NotFoundException('Conta não encontrada ou inativa');
+      }
+      return {
+        importMode,
+        accountId: account.id,
+        cardId: null,
+        invoiceId: null,
+        originId: account.id,
+        parser,
+        parsed,
+        fileName,
+      };
     }
 
-    const parsed = parser.parse(file.buffer);
-    return { account, parser, parsed, fileName: file.originalname || 'extrato.csv' };
+    if (!fields.cardId) {
+      throw new BadRequestException('Cartão é obrigatório');
+    }
+    if (!fields.invoiceId) {
+      throw new BadRequestException('Fatura é obrigatória');
+    }
+
+    const cards = await this.accountsService.listCards(userId, false);
+    const card = cards.find((item) => item.id === fields.cardId);
+    if (!card) {
+      throw new NotFoundException('Cartão não encontrado ou inativo');
+    }
+
+    const invoice = await this.invoicesService.getOwnedInvoice(
+      userId,
+      fields.invoiceId,
+    );
+    if (invoice.cardId !== card.id) {
+      throw new BadRequestException('Fatura não pertence ao cartão selecionado');
+    }
+
+    return {
+      importMode,
+      accountId: null,
+      cardId: card.id,
+      invoiceId: invoice.id,
+      originId: card.id,
+      parser,
+      parsed,
+      fileName,
+    };
   }
 
   private async resolveCategoryId(
@@ -408,22 +508,28 @@ export class ImportService {
 
   private toTransactionRow(
     userId: string,
-    accountId: string,
-    importBatchId: string,
+    upload: ParsedUpload,
     row: CanonicalTransaction,
     categoryId: string,
     dedupKey: string,
   ): Prisma.TransactionCreateManyInput {
+    const cashDate =
+      row.cashDate === null
+        ? null
+        : new Date(`${row.cashDate}T00:00:00.000Z`);
+
     return {
       userId,
       competenceDate: new Date(`${row.competenceDate}T00:00:00.000Z`),
-      cashDate: new Date(`${row.cashDate}T00:00:00.000Z`),
+      cashDate,
       description: row.description,
       amount: new Prisma.Decimal(row.amount),
       type: row.type as TransactionType,
       categoryId,
-      accountId,
-      importBatchId,
+      accountId: upload.accountId,
+      cardId: upload.cardId,
+      invoiceId: upload.invoiceId,
+      importBatchId: '',
       dedupKey,
     };
   }

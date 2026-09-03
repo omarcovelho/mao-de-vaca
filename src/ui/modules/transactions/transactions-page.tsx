@@ -1,6 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../components/page-header';
+import {
+  AccountOriginIcon,
+  CardOriginIcon,
+} from '../../components/origin-icon';
 import { RegimeToggle } from '../../components/regime-toggle';
 import { listAccounts } from '../accounts/api';
 import type { Origin } from '../accounts/types';
@@ -349,8 +353,24 @@ export function TransactionsPage() {
                     {item.category.name}
                   </button>
                 )}
-                {item.account ? (
+                {item.card && item.invoiceId ? (
+                  <Link
+                    to={`/cartoes?invoiceId=${item.invoiceId}`}
+                    className="tx-row__account tx-row__account--link"
+                  >
+                    <CardOriginIcon className="tx-row__origin-icon" />
+                    <span className="tx-row__account-label">{item.card.label}</span>
+                    <span className="bank-pill">{item.card.bank.name}</span>
+                  </Link>
+                ) : item.card ? (
                   <span className="tx-row__account">
+                    <CardOriginIcon className="tx-row__origin-icon" />
+                    <span className="tx-row__account-label">{item.card.label}</span>
+                    <span className="bank-pill">{item.card.bank.name}</span>
+                  </span>
+                ) : item.account ? (
+                  <span className="tx-row__account">
+                    <AccountOriginIcon className="tx-row__origin-icon" />
                     <span className="tx-row__account-label">{item.account.label}</span>
                     <span className="bank-pill">{item.account.bank.name}</span>
                   </span>

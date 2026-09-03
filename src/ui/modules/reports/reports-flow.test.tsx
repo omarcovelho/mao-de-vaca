@@ -258,6 +258,8 @@ describe('Reports UI flow', () => {
                 label: 'Conta',
                 bank: { id: 'b1', name: 'Nubank' },
               },
+              card: null,
+              invoiceId: null,
             },
           ],
         });

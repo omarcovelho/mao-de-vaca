@@ -211,6 +211,8 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Milestone:** **Importação completa** (conta + cartão).
 
+**Spec:** [docs/epics/V4_FATURAS.md](./epics/V4_FATURAS.md).
+
 ---
 
 ## V5 — Lançamentos slice: tabela filtrável e toggle de regime
@@ -407,3 +409,4 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | 2026-09-02 | V2.5 Categories: cadastro de categorias antes da importação; V3/V4 com preview/mapeamento |
 | 2026-09-02 | V2: bancos pré-cadastrados (seed) + cadastro on-demand; Account/Card com `bankId` |
 | 2026-09-03 | V7 Conta-only após V5 (sem V4/V6); link para spec V7_RELATORIOS |
+| 2026-09-03 | V4 faturas + import cartão: link para spec V4_FATURAS |

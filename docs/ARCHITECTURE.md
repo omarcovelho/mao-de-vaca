@@ -185,8 +185,8 @@ flowchart LR
 | **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas** |
-| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId` (cartão após V4), `importBatchId`, `dedupKey`, `active` (soft-disable; listagem padrão só ativos). `importBatchId` identifica o lote de importação (base para um futuro **bulk delete** por importação; não implementado no V3). |
-| **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** |
+| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?` (null em compras de cartão até V6), `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`+`invoiceId`, `importBatchId`, `dedupKey`, `active` (soft-disable; listagem padrão só ativos). |
+| **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** (`balance = sum(amount)`) |
 | **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
 | **ParentPurchase** | PostgreSQL | Agregado informacional; não entra em somas; parcelas vinculadas manualmente |
 | **ImportBatch** | PostgreSQL | `importMode` (`transactions` \| `invoice`), `accountId` ou `cardId`, `invoiceId?`, `parserId`, resultado; cada lançamento criado no lote aponta para este `id` |
@@ -195,14 +195,14 @@ flowchart LR
 
 | Regra | Descrição |
 |-------|-----------|
-| **Saldo de fatura** | `saldo = (compras − estornos) − pagamentos_vinculados` (PROJECT_DEFINITION §3.5) |
-| **Status de fatura** | Derivado do saldo: em aberto / parcialmente paga / quitada |
+| **Saldo de fatura** | V4: `balance = sum(amount)` das txs ativas da fatura (gastos −, estornos +). V6: subtrai pagamentos vinculados (PROJECT_DEFINITION §3.8) |
+| **Status de fatura** | Derivado do saldo: em aberto (`balance < 0`) / quitada (`balance === 0`); parcial após V6 |
 | **Totais de gasto/receita** | `saldo = receitas − despesas`; transferências não entram (RN-01) |
-| **Pagamento de fatura** | Sempre transferência; nunca despesa — evita contagem duplicada (RN-02) |
+| **Pagamento de fatura** | Sempre transferência; nunca despesa — evita contagem duplicada (RN-02). Não importar do CSV da fatura — vínculo manual na Conta (V6) |
 | **Compra-pai** | Nunca contabilizada; apenas parcelas entram nas somas (RN-03) |
-| **Estorno** | Despesa negativa na fatura/período em que apareceu; nunca receita (RN-04) |
+| **Estorno** | Na fatura: `EXPENSE` com valor positivo no CSV; nunca receita (RN-04) |
 | **Investimento** | Transferência: afeta caixa, não afeta gasto nem receita (RN-05) |
-| **Caixa de cartão** | Reconhecido pela data do pagamento real da fatura, não pelo vencimento (RN-06) |
+| **Caixa de cartão** | Reconhecido pela data do pagamento real da fatura, não pelo vencimento (RN-06); até lá `cashDate` null |
 | **Completude do caixa** | Gastos de cartão só aparecem em caixa quando pagamentos estão registrados e vinculados (RN-07) |
 | **Pré-requisito de importação** | Conta ou cartão cadastrado obrigatório; rejeição sem origem válida (RN-08) |
 | **Origens desativadas** | Não aparecem em nova importação; histórico preservado (RN-09) |
@@ -242,15 +242,15 @@ Todo parser, independentemente de banco ou formato, produz lançamentos neste mo
 | Campo | Descrição |
 |-------|-----------|
 | `competenceDate` | Data de competência |
-| `cashDate` | Data de caixa, quando aplicável (débito: igual à competência) |
+| `cashDate` | Data de caixa: no extrato = competência; na fatura = `null` até vínculo de pagamento (V6) |
 | `description` | Descrição do lançamento |
-| `amount` | Valor signed do CSV: **negativo = despesa/estorno; positivo = receita** (contrato do parser padrão) |
-| `type` | `EXPENSE` \| `INCOME` \| `TRANSFER` (enum persistido; o parser deriva EXPENSE/INCOME do sinal; `TRANSFER` só com coluna opcional `tipo`) |
-| `category` | Nome da categoria pré-atribuída no CSV (string do parser; resolvida para `categoryId` na confirmação) |
+| `amount` | Valor signed do CSV. **Extrato:** negativo = despesa; positivo = receita. **Fatura:** negativo = gasto; positivo = estorno (ambos `EXPENSE`; nunca `INCOME` — RN-04). Usuário remove linhas de pagamento do CSV antes de importar |
+| `type` | `EXPENSE` \| `INCOME` \| `TRANSFER` (enum persistido; extrato deriva EXPENSE/INCOME do sinal; fatura: sinal → só `EXPENSE`; `TRANSFER` só com coluna opcional `tipo`) |
+| `category` | Nome da categoria pré-atribuída no CSV (string do parser; resolvida para `categoryId` na confirmação; opcional no modo fatura → `(sem categoria)`) |
 | `accountId` | Conta cadastrada (modo transações) — mutuamente exclusivo com `cardId` |
 | `cardId` | Cartão cadastrado (modo fatura) |
-| `dedupKey` | Identificador estável para deduplicação |
-| `invoiceRef` | Referência de fatura, quando aplicável (cartão) |
+| `dedupKey` | Identificador estável para deduplicação (`accountId` ou `cardId` + data + valor + descrição) |
+| `invoiceId` | Fatura de destino (modo fatura) |
 
 Interface TypeScript em `src/server/modules/import/parsers/`; mapeamento para entidades Prisma no módulo de domínio. **Não exposto à UI.**
 
@@ -419,8 +419,8 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Importação (interface web)
 
-- `GET /api/imports/options` — modos, parsers, contas ativas (V3)
-- `POST /api/imports/preview` — `multipart/form-data`: `importMode` + `accountId` + `parserId` + `file` → `{ rows, unknownCategories[], summary }` (não persiste)
+- `GET /api/imports/options` — modos, parsers, contas ativas, cartões ativos, `invoicesByCard`
+- `POST /api/imports/preview` — `multipart/form-data`: `importMode` + (`accountId` \| `cardId`+`invoiceId`) + `parserId` + `file` → `{ rows, unknownCategories[], summary }` (não persiste)
 - `POST /api/imports/confirm` — mesmo multipart + `categoryMappings` (JSON string) → `{ id, importBatchId, created, skipped, errors[] }` (cada `Transaction` gravada com o mesmo `importBatchId`)
 - `GET /api/imports` — histórico de importações
 
@@ -540,3 +540,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-01 | Cadastro de contas/cartões como requisito fundacional; importação por modo com parser; módulo `accounts` |
 | 2026-09-03 | V3 import conta: parser padrão (sinal → tipo), preview/confirm multipart, dedupKey, transferências em dois arquivos |
 | 2026-09-03 | V5 lançamentos: listagem mês+regime, `Transaction.active`, PATCH categoria/desativar; V5 pode seguir V3 sem V4 |
+| 2026-09-03 | V4 faturas: `Invoice`, import modo fatura, `cashDate` nullable, saldo = sum(imported), sinais iguais ao extrato (+ = estorno/`EXPENSE`) |

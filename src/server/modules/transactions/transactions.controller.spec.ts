@@ -43,8 +43,10 @@ describe('Transactions HTTP', () => {
   async function cleanup() {
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
+    await prisma.invoice.deleteMany({ where: { userId } });
     await prisma.category.deleteMany({ where: { userId } });
     await prisma.account.deleteMany({ where: { userId } });
+    await prisma.card.deleteMany({ where: { userId } });
   }
 
   async function seedTransaction(input: {
@@ -52,9 +54,11 @@ describe('Transactions HTTP', () => {
     amount: string;
     type: 'EXPENSE' | 'INCOME';
     categoryId: string;
-    accountId: string;
+    accountId?: string | null;
+    cardId?: string | null;
+    invoiceId?: string | null;
     competenceDate: string;
-    cashDate?: string;
+    cashDate?: string | null;
     active?: boolean;
     dedupKey: string;
   }) {
@@ -65,9 +69,14 @@ describe('Transactions HTTP', () => {
         amount: new Prisma.Decimal(input.amount),
         type: input.type,
         categoryId: input.categoryId,
-        accountId: input.accountId,
+        accountId: input.accountId ?? null,
+        cardId: input.cardId ?? null,
+        invoiceId: input.invoiceId ?? null,
         competenceDate: new Date(input.competenceDate),
-        cashDate: new Date(input.cashDate ?? input.competenceDate),
+        cashDate:
+          input.cashDate === null
+            ? null
+            : new Date(input.cashDate ?? input.competenceDate),
         importBatchId: batchId,
         dedupKey: input.dedupKey,
         active: input.active ?? true,
@@ -285,6 +294,104 @@ describe('Transactions HTTP', () => {
 
     expect(cashFeb.body.items).toHaveLength(1);
     expect(cashFeb.body.items[0].displayDate).toBe('2026-02-05');
+  });
+
+  it('GET /api/transactions cash regime excludes null cashDate card purchases', async () => {
+    const card = await prisma.card.create({
+      data: { userId, bankId, label: 'Cartão Teste' },
+    });
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: card.id,
+        referenceMonth: new Date('2026-01-01T00:00:00.000Z'),
+        dueDate: new Date('2026-02-10T00:00:00.000Z'),
+      },
+    });
+
+    await seedTransaction({
+      description: 'Compra cartão sem caixa',
+      amount: '-80.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: null,
+      cardId: card.id,
+      invoiceId: invoice.id,
+      competenceDate: '2026-01-15',
+      cashDate: null,
+      dedupKey: 'card-null-cash',
+    });
+
+    const competence = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        regime: 'competence',
+        from: '2026-01-01',
+        to: '2026-01-31',
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(competence.body.items).toHaveLength(1);
+    expect(competence.body.items[0].cashDate).toBeNull();
+
+    const cash = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        regime: 'cash',
+        from: '2026-01-01',
+        to: '2026-01-31',
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(cash.body.items).toHaveLength(0);
+  });
+
+  it('GET /api/transactions includes card origin for invoice purchases', async () => {
+    const card = await prisma.card.create({
+      data: { userId, bankId, label: 'Nubank Roxinho' },
+    });
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: card.id,
+        referenceMonth: new Date('2026-01-01T00:00:00.000Z'),
+        dueDate: new Date('2026-02-10T00:00:00.000Z'),
+      },
+    });
+
+    await seedTransaction({
+      description: 'Compra no cartão',
+      amount: '-42.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: null,
+      cardId: card.id,
+      invoiceId: invoice.id,
+      competenceDate: '2026-01-20',
+      cashDate: null,
+      dedupKey: 'card-origin-1',
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        regime: 'competence',
+        from: '2026-01-01',
+        to: '2026-01-31',
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].account).toBeNull();
+    expect(res.body.items[0].invoiceId).toBe(invoice.id);
+    expect(res.body.items[0].card).toMatchObject({
+      id: card.id,
+      label: 'Nubank Roxinho',
+      bank: { name: 'Nubank' },
+    });
   });
 
   it('GET /api/transactions supports optional categoryId and accountId', async () => {

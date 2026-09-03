@@ -8,6 +8,7 @@ import type {
   CategoryMappingValue,
   ConfirmResponse,
   ImportHistoryItem,
+  ImportModeId,
   ImportOptions,
   PreviewResponse,
 } from './types';
@@ -70,12 +71,20 @@ function toCategoryMappings(
   return mappings;
 }
 
+function formatMonth(isoDate: string): string {
+  const [year, month] = isoDate.slice(0, 7).split('-');
+  return `${month}/${year}`;
+}
+
 export function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [history, setHistory] = useState<ImportHistoryItem[]>([]);
   const [leaves, setLeaves] = useState<Category[]>([]);
+  const [importMode, setImportMode] = useState<ImportModeId>('transactions');
   const [accountId, setAccountId] = useState('');
+  const [cardId, setCardId] = useState('');
+  const [invoiceId, setInvoiceId] = useState('');
   const [parserId, setParserId] = useState('standard');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,6 +111,14 @@ export function ImportPage() {
         setLeaves(flattenLeaves(tree));
         setParserId(nextOptions.parsers[0]?.id ?? 'standard');
         setAccountId((current) => current || nextOptions.accounts[0]?.id || '');
+        const cards = nextOptions.cards ?? [];
+        const invoicesByCard = nextOptions.invoicesByCard ?? {};
+        const firstCardId = cards[0]?.id ?? '';
+        setCardId((current) => current || firstCardId);
+        const firstInvoices = firstCardId
+          ? (invoicesByCard[firstCardId] ?? [])
+          : [];
+        setInvoiceId((current) => current || firstInvoices[0]?.id || '');
       } catch {
         if (!cancelled) {
           setError('Não foi possível carregar a importação.');
@@ -118,12 +135,34 @@ export function ImportPage() {
     };
   }, []);
 
+  const cardInvoices = useMemo(() => {
+    if (!options || !cardId) {
+      return [];
+    }
+    return (options.invoicesByCard ?? {})[cardId] ?? [];
+  }, [options, cardId]);
+
+  useEffect(() => {
+    if (cardInvoices.length === 0) {
+      setInvoiceId('');
+      return;
+    }
+    setInvoiceId((current) =>
+      cardInvoices.some((invoice) => invoice.id === current)
+        ? current
+        : cardInvoices[0].id,
+    );
+  }, [cardInvoices]);
+
   const canConfirm = useMemo(() => {
     if (!preview || !file) {
       return false;
     }
     return mappingsReady(preview.unknownCategories, drafts);
   }, [preview, file, drafts]);
+
+  const originReady =
+    importMode === 'transactions' ? Boolean(accountId) : Boolean(cardId && invoiceId);
 
   function handleFile(next: File | null) {
     setFile(next);
@@ -133,19 +172,29 @@ export function ImportPage() {
     setError(null);
   }
 
+  function switchMode(mode: ImportModeId) {
+    setImportMode(mode);
+    handleFile(null);
+  }
+
   async function handlePreview(event: FormEvent) {
     event.preventDefault();
-    if (!file || !accountId) {
+    if (!file || !originReady) {
       return;
     }
     setBusy('preview');
     setError(null);
     setResult(null);
     const form = new FormData();
-    form.set('importMode', 'transactions');
-    form.set('accountId', accountId);
+    form.set('importMode', importMode);
     form.set('parserId', parserId);
     form.set('file', file);
+    if (importMode === 'transactions') {
+      form.set('accountId', accountId);
+    } else {
+      form.set('cardId', cardId);
+      form.set('invoiceId', invoiceId);
+    }
     try {
       const next = await importApi.previewImport(form);
       setPreview(next);
@@ -171,18 +220,24 @@ export function ImportPage() {
     setBusy('confirm');
     setError(null);
     const form = new FormData();
-    form.set('importMode', 'transactions');
-    form.set('accountId', accountId);
+    form.set('importMode', importMode);
     form.set('parserId', parserId);
     form.set(
       'categoryMappings',
       JSON.stringify(toCategoryMappings(preview.unknownCategories, drafts)),
     );
     form.set('file', file);
+    if (importMode === 'transactions') {
+      form.set('accountId', accountId);
+    } else {
+      form.set('cardId', cardId);
+      form.set('invoiceId', invoiceId);
+    }
     try {
       const next = await importApi.confirmImport(form);
       setResult(next);
       setHistory(await importApi.listImportHistory());
+      setOptions(await importApi.getImportOptions());
     } catch (err) {
       setError(
         err instanceof Error
@@ -202,7 +257,10 @@ export function ImportPage() {
     );
   }
 
-  if (options && options.accounts.length === 0) {
+  const hasAccounts = (options?.accounts.length ?? 0) > 0;
+  const hasCards = (options?.cards?.length ?? 0) > 0;
+
+  if (!hasAccounts && !hasCards) {
     return (
       <section className="page">
         <PageHeader
@@ -210,7 +268,7 @@ export function ImportPage() {
           subtitle="Envie um CSV do seu banco ou cartão"
         />
         <p className="page__empty">
-          Cadastre uma conta para importar extratos.{' '}
+          Cadastre uma conta ou cartão para importar.{' '}
           <Link to="/contas">Ir para contas</Link>
         </p>
       </section>
@@ -224,36 +282,100 @@ export function ImportPage() {
         subtitle="Envie um CSV do seu banco ou cartão"
       />
 
-      <form className="form-panel import-form" onSubmit={(e) => void handlePreview(e)}>
+      <form
+        className="form-panel import-form"
+        onSubmit={(e) => void handlePreview(e)}
+      >
         <div className="form-stack">
           <span className="form-label">Tipo</span>
           <div className="pill-group" role="group" aria-label="Tipo de importação">
-            <button type="button" className="pill pill--active">
+            <button
+              type="button"
+              className={`pill${importMode === 'transactions' ? ' pill--active' : ''}`}
+              onClick={() => switchMode('transactions')}
+              disabled={!hasAccounts}
+            >
               Extrato de conta
             </button>
-            <button type="button" className="pill" disabled>
+            <button
+              type="button"
+              className={`pill${importMode === 'invoice' ? ' pill--active' : ''}`}
+              onClick={() => switchMode('invoice')}
+              disabled={!hasCards}
+            >
               Fatura de cartão
             </button>
           </div>
-          <p className="form-hint">
-            Importação de fatura de cartão estará disponível no próximo passo.
-          </p>
+          {importMode === 'invoice' ? (
+            <p className="form-hint">
+              Remova as linhas de pagamento do CSV antes de importar. Importe
+              apenas gastos e estornos.
+            </p>
+          ) : null}
         </div>
 
-        <div className="form-stack">
-          <label htmlFor="import-account">Origem</label>
-          <select
-            id="import-account"
-            value={accountId}
-            onChange={(event) => setAccountId(event.target.value)}
-          >
-            {options?.accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.label} · {account.bank.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {importMode === 'transactions' ? (
+          <div className="form-stack">
+            <label htmlFor="import-account">Origem</label>
+            {hasAccounts ? (
+              <select
+                id="import-account"
+                value={accountId}
+                onChange={(event) => setAccountId(event.target.value)}
+              >
+                {options?.accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.label} · {account.bank.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="form-hint">
+                Nenhuma conta ativa.{' '}
+                <Link to="/contas">Cadastrar conta</Link>
+              </p>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="form-stack">
+              <label htmlFor="import-card">Cartão</label>
+              <select
+                id="import-card"
+                value={cardId}
+                onChange={(event) => setCardId(event.target.value)}
+              >
+                {options?.cards?.map((card) => (
+                  <option key={card.id} value={card.id}>
+                    {card.label} · {card.bank.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-stack">
+              <label htmlFor="import-invoice">Fatura</label>
+              {cardInvoices.length === 0 ? (
+                <p className="form-hint">
+                  Nenhuma fatura neste cartão.{' '}
+                  <Link to="/cartoes">Criar fatura</Link>
+                </p>
+              ) : (
+                <select
+                  id="import-invoice"
+                  value={invoiceId}
+                  onChange={(event) => setInvoiceId(event.target.value)}
+                >
+                  {cardInvoices.map((invoice) => (
+                    <option key={invoice.id} value={invoice.id}>
+                      {formatMonth(invoice.referenceMonth)} · vence{' '}
+                      {invoice.dueDate}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </>
+        )}
 
         <div className="form-stack">
           <label htmlFor="import-parser">Parser</label>
@@ -304,7 +426,7 @@ export function ImportPage() {
           <button
             type="submit"
             className="btn btn--primary"
-            disabled={!file || !accountId || busy !== null}
+            disabled={!file || !originReady || busy !== null}
           >
             {busy === 'preview' ? 'Pré-visualizando…' : 'Pré-visualizar'}
           </button>
@@ -471,8 +593,10 @@ export function ImportPage() {
               <li key={item.id}>
                 <strong>{item.fileName}</strong>
                 <span>
-                  {item.accountLabel ?? 'Conta'} · {item.createdCount} criados,{' '}
-                  {item.skippedCount} ignorados
+                  {item.importMode === 'invoice'
+                    ? (item.cardLabel ?? 'Cartão')
+                    : (item.accountLabel ?? 'Conta')}{' '}
+                  · {item.createdCount} criados, {item.skippedCount} ignorados
                 </span>
               </li>
             ))}

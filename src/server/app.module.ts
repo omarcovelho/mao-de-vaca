@@ -4,6 +4,7 @@ import { AccountsModule } from './modules/accounts/accounts.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ImportModule } from './modules/import/import.module';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
@@ -17,6 +18,7 @@ import { TransactionsModule } from './modules/transactions/transactions.module';
     CategoriesModule,
     TransactionsModule,
     ImportModule,
+    InvoicesModule,
     ReportsModule,
   ],
 })

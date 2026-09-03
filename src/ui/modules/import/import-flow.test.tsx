@@ -9,6 +9,7 @@ import { ProtectedRoute } from '../auth/protected-route';
 import { HomePage } from '../accounts/home-page';
 import { SetupStatusProvider } from '../accounts/setup-status-context';
 import { AccountsPage } from '../accounts/accounts-page';
+import { CardsPage } from '../accounts/cards-page';
 import { RegimeProvider } from '../transactions/regime-context';
 import { TransactionsPage } from '../transactions/transactions-page';
 import { ImportPage } from './import-page';
@@ -24,6 +25,7 @@ function renderImportApp(initialPath = '/importar') {
                 <Route element={<AppShell />}>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/contas" element={<AccountsPage />} />
+                  <Route path="/cartoes" element={<CardsPage />} />
                   <Route element={<RequiresOrigins />}>
                     <Route path="/importar" element={<ImportPage />} />
                     <Route path="/lancamentos" element={<TransactionsPage />} />
@@ -40,9 +42,44 @@ function renderImportApp(initialPath = '/importar') {
 
 const setupOk = {
   hasAccounts: true,
-  hasCards: false,
+  hasCards: true,
   hasCategories: true,
   readyForImport: true,
+};
+
+const defaultOptions = {
+  modes: [
+    { id: 'transactions', label: 'Extrato de conta', enabled: true },
+    { id: 'invoice', label: 'Fatura de cartão', enabled: true },
+  ],
+  parsers: [{ id: 'standard', label: 'Padrão' }],
+  accounts: [
+    {
+      id: 'acc-1',
+      label: 'Nubank CC',
+      bank: { id: 'b1', name: 'Nubank' },
+      active: true,
+    },
+  ],
+  cards: [
+    {
+      id: 'card-1',
+      label: 'Nubank Roxinho',
+      bank: { id: 'b1', name: 'Nubank' },
+      active: true,
+    },
+  ],
+  invoicesByCard: {
+    'card-1': [
+      {
+        id: 'inv-1',
+        referenceMonth: '2026-08-01',
+        dueDate: '2026-09-10',
+        balance: 0,
+        status: 'paid',
+      },
+    ],
+  },
 };
 
 describe('Import UI flow', () => {
@@ -69,21 +106,7 @@ describe('Import UI flow', () => {
         return Response.json(setupOk);
       }
       if (url.includes('/api/imports/options')) {
-        return Response.json({
-          modes: [
-            { id: 'transactions', label: 'Extrato de conta', enabled: true },
-            { id: 'invoice', label: 'Fatura de cartão', enabled: false },
-          ],
-          parsers: [{ id: 'standard', label: 'Padrão' }],
-          accounts: [
-            {
-              id: 'acc-1',
-              label: 'Nubank CC',
-              bank: { id: 'b1', name: 'Nubank' },
-              active: true,
-            },
-          ],
-        });
+        return Response.json(defaultOptions);
       }
       if (url.endsWith('/api/imports') && (!init || init.method === undefined)) {
         return Response.json([]);
@@ -170,7 +193,7 @@ describe('Import UI flow', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: 'Fatura de cartão' }),
-    ).toBeDisabled();
+    ).toBeEnabled();
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -208,7 +231,45 @@ describe('Import UI flow', () => {
     });
   });
 
-  it('asks to register an account when none exist', async () => {
+  it('switches to invoice mode with card and invoice selectors', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/imports/options')) {
+        return Response.json(defaultOptions);
+      }
+      if (url.includes('/api/imports')) {
+        return Response.json([]);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderImportApp();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Importar' }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Fatura de cartão' }));
+
+    expect(
+      screen.getByText(/remova as linhas de pagamento/i),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Cartão')).toBeInTheDocument();
+    expect(screen.getByLabelText('Fatura')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /08\/2026/i })).toBeInTheDocument();
+  });
+
+  it('redirects to setup when there are no accounts or cards', async () => {
     vi.mocked(fetch).mockImplementation(async (input) => {
       const url = String(input);
       if (url.includes('/api/auth/me')) {
@@ -217,7 +278,7 @@ describe('Import UI flow', () => {
       if (url.includes('/api/setup/status')) {
         return Response.json({
           hasAccounts: false,
-          hasCards: true,
+          hasCards: false,
           hasCategories: true,
           readyForImport: false,
         });
@@ -227,6 +288,8 @@ describe('Import UI flow', () => {
           modes: [],
           parsers: [{ id: 'standard', label: 'Padrão' }],
           accounts: [],
+          cards: [],
+          invoicesByCard: {},
         });
       }
       if (url.includes('/api/imports')) {
@@ -241,11 +304,10 @@ describe('Import UI flow', () => {
     renderImportApp();
 
     expect(
-      await screen.findByText(/cadastre uma conta para importar extratos/i),
+      await screen.findByRole('heading', { name: 'Vamos começar' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ir para contas' })).toHaveAttribute(
-      'href',
-      '/contas',
-    );
+    expect(
+      screen.getByText(/cadastre ao menos uma conta ou cartão/i),
+    ).toBeInTheDocument();
   });
 });

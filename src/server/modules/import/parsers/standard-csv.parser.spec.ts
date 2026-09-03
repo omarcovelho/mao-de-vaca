@@ -86,4 +86,75 @@ not-a-date,X,-10,Alimentação
       parseStandardCsv(csv(`foo,bar\n1,2\n`)),
     ).toThrow(/cabeçalho/i);
   });
+
+  it('parses amounts with space after the minus sign', () => {
+    const result = parseStandardCsv(
+      csv(`data,descricao,valor,categoria
+2026-08-17,Compra,"- 1.234,56",Alimentação
+`),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.transactions[0]).toMatchObject({
+      amount: '-1234.56',
+      type: 'EXPENSE',
+    });
+  });
+
+  describe('invoice mode', () => {
+    it('maps negative to EXPENSE compra and positive to EXPENSE estorno', () => {
+      const result = parseStandardCsv(
+        csv(`date,title,amount
+2026-08-31,Pao de Acucar,"-19,90"
+2026-08-30,Estorno Apple,"9,90"
+`),
+        { mode: 'invoice' },
+      );
+
+      expect(result.errors).toEqual([]);
+      expect(result.transactions).toEqual([
+        expect.objectContaining({
+          description: 'Pao de Acucar',
+          amount: '-19.90',
+          type: 'EXPENSE',
+          cashDate: null,
+          category: '(sem categoria)',
+        }),
+        expect.objectContaining({
+          description: 'Estorno Apple',
+          amount: '9.90',
+          type: 'EXPENSE',
+          cashDate: null,
+          category: '(sem categoria)',
+        }),
+      ]);
+    });
+
+    it('accepts English headers and optional categoria', () => {
+      const result = parseStandardCsv(
+        csv(`date,title,amount,categoria
+2026-08-15,Mercado,-100.00,Alimentação
+`),
+        { mode: 'invoice' },
+      );
+
+      expect(result.errors).toEqual([]);
+      expect(result.transactions[0]).toMatchObject({
+        category: 'Alimentação',
+        amount: '-100.00',
+        type: 'EXPENSE',
+      });
+    });
+
+    it('does not require categoria header', () => {
+      expect(() =>
+        parseStandardCsv(
+          csv(`date,title,amount
+2026-08-15,Mercado,-10.00
+`),
+          { mode: 'invoice' },
+        ),
+      ).not.toThrow();
+    });
+  });
 });

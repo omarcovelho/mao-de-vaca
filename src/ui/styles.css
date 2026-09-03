@@ -409,6 +409,13 @@ a {
   margin-bottom: 0.75rem;
 }
 
+.section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .section__title {
   margin: 0;
   font-size: 0.875rem;
@@ -549,6 +556,25 @@ a {
   gap: 1rem;
   padding: 0.875rem 0;
   border-bottom: 1px solid var(--border);
+}
+
+.list-row--button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.list-row--button:hover {
+  background: #f7f4ef;
+}
+
+.list-row--button:focus-visible {
+  outline: 2px solid var(--accent, #2d6a4f);
+  outline-offset: 2px;
 }
 
 .list-row:last-child {
@@ -1021,6 +1047,19 @@ a {
   gap: 0.4rem;
   min-width: 0;
   overflow: hidden;
+}
+
+.tx-row__account--link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.tx-row__account--link:hover .tx-row__account-label {
+  text-decoration: underline;
+}
+
+.tx-rows--invoice .tx-row--compact {
+  grid-template-columns: 2.5rem minmax(0, 1.4fr) minmax(0, 1fr) auto;
 }
 
 .tx-row__account-label {

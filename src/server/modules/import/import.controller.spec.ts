@@ -45,8 +45,10 @@ describe('Import HTTP', () => {
   async function cleanup() {
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
+    await prisma.invoice.deleteMany({ where: { userId } });
     await prisma.category.deleteMany({ where: { userId } });
     await prisma.account.deleteMany({ where: { userId } });
+    await prisma.card.deleteMany({ where: { userId } });
   }
 
   beforeAll(async () => {
@@ -141,9 +143,11 @@ describe('Import HTTP', () => {
     expect(response.body.modes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'transactions', enabled: true }),
-        expect.objectContaining({ id: 'invoice', enabled: false }),
+        expect.objectContaining({ id: 'invoice', enabled: true }),
       ]),
     );
+    expect(response.body.cards).toEqual([]);
+    expect(response.body.invoicesByCard).toEqual({});
   });
 
   it('POST /api/imports/preview does not persist and reports unknown categories', async () => {
@@ -266,7 +270,7 @@ describe('Import HTTP', () => {
     });
   });
 
-  it('POST /api/imports/preview rejects missing account and invoice mode', async () => {
+  it('POST /api/imports/preview rejects missing account', async () => {
     await request(app.getHttpServer())
       .post('/api/imports/preview')
       .set('Cookie', authCookie)
@@ -276,17 +280,91 @@ describe('Import HTTP', () => {
       .expect(400);
 
     await request(app.getHttpServer())
+      .get('/api/imports/options')
+      .expect(401);
+  });
+
+  it('POST /api/imports/confirm invoice mode persists card txs with null cashDate', async () => {
+    const card = await prisma.card.create({
+      data: { userId, bankId, label: 'Nubank Roxinho' },
+    });
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: card.id,
+        referenceMonth: new Date('2026-08-01T00:00:00.000Z'),
+        dueDate: new Date('2026-09-10T00:00:00.000Z'),
+      },
+    });
+
+    const invoiceCsv = `date,title,amount
+2026-08-31,Pao de Acucar,"-19,90"
+2026-08-30,Estorno Apple,"9,90"
+`;
+
+    const preview = await request(app.getHttpServer())
       .post('/api/imports/preview')
       .set('Cookie', authCookie)
       .field('importMode', 'invoice')
-      .field('accountId', accountId)
+      .field('cardId', card.id)
+      .field('invoiceId', invoice.id)
       .field('parserId', 'standard')
-      .attach('file', Buffer.from(CSV), 'extrato.csv')
-      .expect(400);
+      .attach('file', Buffer.from(invoiceCsv), 'fatura.csv')
+      .expect(200);
 
-    await request(app.getHttpServer())
-      .get('/api/imports/options')
-      .expect(401);
+    expect(preview.body.importMode).toBe('invoice');
+    expect(preview.body.unknownCategories).toEqual(['(sem categoria)']);
+    expect(preview.body.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          description: 'Pao de Acucar',
+          amount: '-19.90',
+          type: 'EXPENSE',
+        }),
+        expect.objectContaining({
+          description: 'Estorno Apple',
+          amount: '9.90',
+          type: 'EXPENSE',
+        }),
+      ]),
+    );
+
+    const confirm = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'invoice')
+      .field('cardId', card.id)
+      .field('invoiceId', invoice.id)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({ '(sem categoria)': foodId }),
+      )
+      .attach('file', Buffer.from(invoiceCsv), 'fatura.csv')
+      .expect(200);
+
+    expect(confirm.body).toMatchObject({ created: 2, skipped: 0 });
+
+    const rows = await prisma.transaction.findMany({
+      where: { userId, invoiceId: invoice.id },
+      orderBy: { competenceDate: 'asc' },
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.cardId === card.id)).toBe(true);
+    expect(rows.every((row) => row.accountId === null)).toBe(true);
+    expect(rows.every((row) => row.cashDate === null)).toBe(true);
+    expect(rows.map((row) => String(row.amount))).toEqual(['9.9', '-19.9']);
+
+    const invoices = await request(app.getHttpServer())
+      .get(`/api/cards/${card.id}/invoices`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(invoices.body[0]).toMatchObject({
+      id: invoice.id,
+      balance: -10,
+      status: 'open',
+    });
   });
 
   it('POST /api/imports/confirm maps a parent CSV name to an existing leaf', async () => {
