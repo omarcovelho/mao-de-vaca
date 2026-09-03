@@ -1,12 +1,18 @@
 import { Module } from '@nestjs/common';
 import { AccountsModule } from '../accounts/accounts.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { InvoicesModule } from '../invoices/invoices.module';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { ImportsController } from './import.controller';
 import { ImportService } from './import.service';
 
 @Module({
-  imports: [AccountsModule, CategoriesModule, TransactionsModule],
+  imports: [
+    AccountsModule,
+    CategoriesModule,
+    TransactionsModule,
+    InvoicesModule,
+  ],
   controllers: [ImportsController],
   providers: [ImportService],
 })

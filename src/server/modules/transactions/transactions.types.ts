@@ -20,7 +20,7 @@ export type TransactionItemResponse = {
   amount: number;
   type: 'EXPENSE' | 'INCOME' | 'TRANSFER';
   competenceDate: string;
-  cashDate: string;
+  cashDate: string | null;
   displayDate: string;
   active: boolean;
   category: {
@@ -35,6 +35,12 @@ export type TransactionItemResponse = {
     label: string;
     bank: { id: string; name: string };
   } | null;
+  card: {
+    id: string;
+    label: string;
+    bank: { id: string; name: string };
+  } | null;
+  invoiceId: string | null;
 };
 
 export type ListTransactionsResponse = {

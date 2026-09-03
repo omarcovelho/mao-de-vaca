@@ -560,6 +560,9 @@ describe('Accounts UI flow', () => {
         hasCards = true;
         return Response.json(created, { status: 201 });
       }
+      if (url.includes('/invoices')) {
+        return Response.json([]);
+      }
       if (url.includes('/api/cards') && !init?.method) {
         return Response.json(cards);
       }
@@ -661,6 +664,9 @@ describe('Accounts UI flow', () => {
         cards = [...cards, created];
         hasCards = true;
         return Response.json(created, { status: 201 });
+      }
+      if (url.includes('/invoices')) {
+        return Response.json([]);
       }
       if (url.includes('/api/cards') && !init?.method) {
         return Response.json(cards);

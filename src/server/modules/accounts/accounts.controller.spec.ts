@@ -97,6 +97,9 @@ describe('Accounts HTTP', () => {
     await prisma.importBatch.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
+    await prisma.invoice.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
     await prisma.account.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
@@ -116,6 +119,9 @@ describe('Accounts HTTP', () => {
       where: { userId: { in: [userId, otherUserId] } },
     });
     await prisma.importBatch.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
+    await prisma.invoice.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
     await prisma.account.deleteMany({

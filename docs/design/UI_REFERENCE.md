@@ -76,8 +76,9 @@ Login (`/login`) e onboarding ficam fora da sidebar.
 - Lista em **uma linha** por lançamento: data, descrição, categoria (editável), conta + banco, valor; ação **Desativar**.
 
 ### Importar
-- Tipo: pills “Extrato de conta” / “Fatura de cartão” (fatura desabilitada até V4).
-- Select de origem (conta ativa) e parser (Padrão).
+- Tipo: pills “Extrato de conta” / “Fatura de cartão”.
+- Extrato: select de conta ativa + parser.
+- Fatura: select de cartão + fatura + parser; hint para remover linhas de pagamento do CSV.
 - Zona de drag-and-drop para CSV + “Pré-visualizar”.
 - Pré-visualização com valores signed, tipo derivado, categorias desconhecidas (mapear ou criar) e “Confirmar importação”.
 - Resumo (criados / ignorados) e histórico de lotes.
@@ -120,4 +121,4 @@ Status de fatura derivados do domínio: aberta, parcial, quitada (RN do saldo = 
 
 ## Relação com a UI atual
 
-A implementação em `src/ui/` usa sidebar + tokens CSS. Conta-only até V4/V6: Visão geral e Relatórios (V7) cobrem indicadores de conta; faturas/cartão na UI de cartões ficam para épicos posteriores.
+A implementação em `src/ui/` usa sidebar + tokens CSS. Faturas listadas/criadas em `/cartoes` (V4); vínculo de pagamento no detalhe fica para V6.

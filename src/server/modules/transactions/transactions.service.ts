@@ -33,9 +33,14 @@ type TransactionRow = Transaction & {
     label: string;
     bank: { id: string; name: string };
   } | null;
+  card: {
+    id: string;
+    label: string;
+    bank: { id: string; name: string };
+  } | null;
 };
 
-const accountInclude = {
+const originInclude = {
   select: {
     id: true,
     label: true,
@@ -110,7 +115,8 @@ export class TransactionsService {
             kind: true,
           },
         },
-        account: accountInclude,
+        account: originInclude,
+        card: originInclude,
       },
       orderBy: [{ [dateField]: 'desc' }, { createdAt: 'desc' }],
     });
@@ -170,7 +176,8 @@ export class TransactionsService {
             kind: true,
           },
         },
-        account: accountInclude,
+        account: originInclude,
+        card: originInclude,
       },
     });
 
@@ -225,7 +232,7 @@ export class TransactionsService {
     regime: RegimeApi,
   ): TransactionItemResponse {
     const competenceDate = this.toIsoDate(row.competenceDate);
-    const cashDate = this.toIsoDate(row.cashDate);
+    const cashDate = row.cashDate ? this.toIsoDate(row.cashDate) : null;
     return {
       id: row.id,
       description: row.description,
@@ -233,7 +240,8 @@ export class TransactionsService {
       type: row.type,
       competenceDate,
       cashDate,
-      displayDate: regime === 'competence' ? competenceDate : cashDate,
+      displayDate:
+        regime === 'competence' ? competenceDate : (cashDate ?? competenceDate),
       active: row.active,
       category: {
         id: row.category.id,
@@ -252,6 +260,17 @@ export class TransactionsService {
             },
           }
         : null,
+      card: row.card
+        ? {
+            id: row.card.id,
+            label: row.card.label,
+            bank: {
+              id: row.card.bank.id,
+              name: row.card.bank.name,
+            },
+          }
+        : null,
+      invoiceId: row.invoiceId,
     };
   }
 }

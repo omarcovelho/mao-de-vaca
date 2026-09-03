@@ -189,6 +189,9 @@ export class ReportsService {
     for (const row of rows) {
       const date =
         dateField === 'competenceDate' ? row.competenceDate : row.cashDate;
+      if (!date) {
+        continue;
+      }
       const month = toMonthKey(date);
       const bucket = buckets.get(month);
       if (!bucket) {

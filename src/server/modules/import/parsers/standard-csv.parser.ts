@@ -1,7 +1,19 @@
 import { BadRequestException } from '@nestjs/common';
-import type { ParseResult } from './canonical';
+import type { ParseOptions, ParseResult } from './canonical';
+import { MISSING_CATEGORY_LABEL } from './canonical';
 
-const REQUIRED_HEADERS = ['data', 'descricao', 'valor', 'categoria'] as const;
+const HEADER_ALIASES: Record<string, string> = {
+  data: 'data',
+  date: 'data',
+  descricao: 'descricao',
+  title: 'descricao',
+  valor: 'valor',
+  amount: 'valor',
+  categoria: 'categoria',
+  category: 'categoria',
+  tipo: 'tipo',
+  type: 'tipo',
+};
 
 function normalizeHeader(value: string): string {
   return value
@@ -9,6 +21,11 @@ function normalizeHeader(value: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+function canonicalHeader(value: string): string {
+  const normalized = normalizeHeader(value);
+  return HEADER_ALIASES[normalized] ?? normalized;
 }
 
 function splitCsvLine(line: string): string[] {
@@ -90,7 +107,11 @@ function isTransferType(raw: string | undefined): boolean {
   return normalized === 'transferencia' || normalized === 'transfer';
 }
 
-export function parseStandardCsv(buffer: Buffer): ParseResult {
+export function parseStandardCsv(
+  buffer: Buffer,
+  options: ParseOptions = {},
+): ParseResult {
+  const mode = options.mode ?? 'transactions';
   const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
   const lines = text.split(/\r?\n/).filter((line, index, all) => {
     if (line.trim() !== '') {
@@ -103,11 +124,16 @@ export function parseStandardCsv(buffer: Buffer): ParseResult {
     throw new BadRequestException('Arquivo CSV vazio');
   }
 
-  const headers = splitCsvLine(lines[0]).map(normalizeHeader);
-  for (const required of REQUIRED_HEADERS) {
-    if (!headers.includes(required)) {
+  const headers = splitCsvLine(lines[0]).map(canonicalHeader);
+  const required =
+    mode === 'invoice'
+      ? (['data', 'descricao', 'valor'] as const)
+      : (['data', 'descricao', 'valor', 'categoria'] as const);
+
+  for (const name of required) {
+    if (!headers.includes(name)) {
       throw new BadRequestException(
-        `Cabeçalho inválido: coluna "${required}" é obrigatória`,
+        `Cabeçalho inválido: coluna "${name}" é obrigatória`,
       );
     }
   }
@@ -133,7 +159,11 @@ export function parseStandardCsv(buffer: Buffer): ParseResult {
     const date = parseDate(cells[index.data] ?? '');
     const description = (cells[index.descricao] ?? '').trim();
     const amount = parseAmount(cells[index.valor] ?? '');
-    const category = (cells[index.categoria] ?? '').trim();
+    const rawCategory =
+      index.categoria >= 0 ? (cells[index.categoria] ?? '').trim() : '';
+    const category =
+      rawCategory ||
+      (mode === 'invoice' ? MISSING_CATEGORY_LABEL : '');
     const tipo = index.tipo >= 0 ? cells[index.tipo] : undefined;
 
     if (!date) {
@@ -152,18 +182,25 @@ export function parseStandardCsv(buffer: Buffer): ParseResult {
       errors.push({ line: lineNumber, message: 'Valor não pode ser zero' });
       continue;
     }
+    if (mode === 'transactions' && !category) {
+      errors.push({ line: lineNumber, message: 'Categoria é obrigatória' });
+      continue;
+    }
 
     const isNegative = amount.startsWith('-');
-    const type = isTransferType(tipo)
-      ? 'TRANSFER'
-      : isNegative
-        ? 'EXPENSE'
-        : 'INCOME';
+    let type: ParseResult['transactions'][number]['type'];
+    if (isTransferType(tipo)) {
+      type = 'TRANSFER';
+    } else if (mode === 'invoice') {
+      type = 'EXPENSE';
+    } else {
+      type = isNegative ? 'EXPENSE' : 'INCOME';
+    }
 
     transactions.push({
       line: lineNumber,
       competenceDate: date,
-      cashDate: date,
+      cashDate: mode === 'invoice' ? null : date,
       description,
       amount,
       type,

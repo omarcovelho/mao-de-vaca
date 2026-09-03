@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../../components/page-header';
+import {
+  AccountOriginIcon,
+  CardOriginIcon,
+} from '../../components/origin-icon';
 import { RegimeToggle } from '../../components/regime-toggle';
 import { CategoriesSetupBanner } from '../categories/categories-setup-banner';
 import * as reportsApi from '../reports/api';
@@ -177,8 +181,15 @@ export function HomePage() {
                   {item.description}
                 </span>
                 <span className="tx-row__category">{item.category.name}</span>
-                {item.account ? (
+                {item.card ? (
                   <span className="tx-row__account">
+                    <CardOriginIcon className="tx-row__origin-icon" />
+                    <span className="tx-row__account-label">{item.card.label}</span>
+                    <span className="bank-pill">{item.card.bank.name}</span>
+                  </span>
+                ) : item.account ? (
+                  <span className="tx-row__account">
+                    <AccountOriginIcon className="tx-row__origin-icon" />
                     <span className="tx-row__account-label">{item.account.label}</span>
                     <span className="bank-pill">{item.account.bank.name}</span>
                   </span>

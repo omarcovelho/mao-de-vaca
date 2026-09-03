@@ -48,6 +48,8 @@ export class ImportsController {
     body: {
       importMode?: string;
       accountId?: string;
+      cardId?: string;
+      invoiceId?: string;
       parserId?: string;
     },
   ) {
@@ -64,6 +66,8 @@ export class ImportsController {
     body: {
       importMode?: string;
       accountId?: string;
+      cardId?: string;
+      invoiceId?: string;
       parserId?: string;
       categoryMappings?: string;
     },
