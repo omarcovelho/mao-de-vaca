@@ -280,6 +280,10 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Depende de:** V5 (toggle); V6 recomendado para demo completa em caixa.
 
+**Pode rodar antes de V4/V6** (mesmo desvio de V5): dashboard Conta-only; regimes de cartão após V6.
+
+**Spec:** [docs/epics/V7_RELATORIOS.md](./epics/V7_RELATORIOS.md).
+
 ---
 
 ## V8 — Compra-pai slice: agrupamento informacional de parcelas
@@ -402,3 +406,4 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | 2026-09-01 | Versão inicial: épicos verticais V0–V9 alinhados a cadastro-first e regimes competência/caixa |
 | 2026-09-02 | V2.5 Categories: cadastro de categorias antes da importação; V3/V4 com preview/mapeamento |
 | 2026-09-02 | V2: bancos pré-cadastrados (seed) + cadastro on-demand; Account/Card com `bankId` |
+| 2026-09-03 | V7 Conta-only após V5 (sem V4/V6); link para spec V7_RELATORIOS |
