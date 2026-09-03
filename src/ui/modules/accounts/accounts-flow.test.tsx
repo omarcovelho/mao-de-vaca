@@ -6,6 +6,7 @@ import { AuthProvider } from '../auth/auth-context';
 import { LoginPage } from '../auth/login-page';
 import { ProtectedRoute } from '../auth/protected-route';
 import { AppShell } from '../../components/app-shell';
+import { RegimeProvider } from '../transactions/regime-context';
 import { AccountsPage } from './accounts-page';
 import { CardsPage } from './cards-page';
 import { HomePage } from './home-page';
@@ -16,15 +17,17 @@ function renderApp(initialPath: string) {
     <MemoryRouter initialEntries={[initialPath]}>
       <AuthProvider>
         <SetupStatusProvider>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppShell />}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/contas" element={<AccountsPage />} />
-                <Route path="/cartoes" element={<CardsPage />} />
+          <RegimeProvider>
+            <Routes>
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/contas" element={<AccountsPage />} />
+                  <Route path="/cartoes" element={<CardsPage />} />
+                </Route>
               </Route>
-            </Route>
-          </Routes>
+            </Routes>
+          </RegimeProvider>
         </SetupStatusProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -184,14 +187,16 @@ describe('Accounts UI flow', () => {
       <MemoryRouter initialEntries={['/']}>
         <AuthProvider>
           <SetupStatusProvider>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<HomePage />} />
+            <RegimeProvider>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<HomePage />} />
+                  </Route>
                 </Route>
-              </Route>
-            </Routes>
+              </Routes>
+            </RegimeProvider>
           </SetupStatusProvider>
         </AuthProvider>
       </MemoryRouter>,

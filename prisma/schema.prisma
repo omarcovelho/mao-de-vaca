@@ -134,6 +134,7 @@ model Transaction {
   accountId      String?
   importBatchId  String
   dedupKey       String
+  active         Boolean         @default(true)
   createdAt      DateTime        @default(now())
   user           User            @relation(fields: [userId], references: [id])
   category       Category        @relation(fields: [categoryId], references: [id])
@@ -145,4 +146,5 @@ model Transaction {
   @@index([accountId])
   @@index([categoryId])
   @@index([importBatchId])
+  @@index([userId, active])
 }

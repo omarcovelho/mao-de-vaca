@@ -7,6 +7,7 @@ import { AuthProvider } from '../auth/auth-context';
 import { ProtectedRoute } from '../auth/protected-route';
 import { HomePage } from '../accounts/home-page';
 import { SetupStatusProvider } from '../accounts/setup-status-context';
+import { RegimeProvider } from '../transactions/regime-context';
 import { CategoriesPage } from './categories-page';
 
 function renderCategoriesApp(initialPath = '/categorias') {
@@ -14,14 +15,16 @@ function renderCategoriesApp(initialPath = '/categorias') {
     <MemoryRouter initialEntries={[initialPath]}>
       <AuthProvider>
         <SetupStatusProvider>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppShell />}>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/categorias" element={<CategoriesPage />} />
+          <RegimeProvider>
+            <Routes>
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/categorias" element={<CategoriesPage />} />
+                </Route>
               </Route>
-            </Route>
-          </Routes>
+            </Routes>
+          </RegimeProvider>
         </SetupStatusProvider>
       </AuthProvider>
     </MemoryRouter>,

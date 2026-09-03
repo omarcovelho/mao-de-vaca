@@ -71,8 +71,9 @@ Login (`/login`) e onboarding ficam fora da sidebar.
 - **Recentes:** 3 lançamentos + “Ver todos”.
 
 ### Lançamentos
-- Busca por descrição + filtro de mês.
-- Lista simples (descrição, categoria · data, valor); sem tabela densa.
+- Seletor de **mês** + toggle de **regime** (competência / caixa).
+- Por padrão lista **todas as contas**; filtros opcionais: categoria, conta, data de, data até.
+- Lista em **uma linha** por lançamento: data, descrição, categoria (editável), conta + banco, valor; ação **Desativar**.
 
 ### Importar
 - Tipo: pills “Extrato de conta” / “Fatura de cartão” (fatura desabilitada até V4).

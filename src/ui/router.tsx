@@ -9,6 +9,7 @@ import { LoginPage } from './modules/auth/login-page';
 import { ProtectedRoute } from './modules/auth/protected-route';
 import { CategoriesPage } from './modules/categories/categories-page';
 import { ImportPage } from './modules/import/import-page';
+import { TransactionsPage } from './modules/transactions/transactions-page';
 
 export function AppRouter() {
   return (
@@ -21,16 +22,7 @@ export function AppRouter() {
           <Route path="/cartoes" element={<CardsPage />} />
           <Route path="/categorias" element={<CategoriesPage />} />
           <Route element={<RequiresOrigins />}>
-            <Route
-              path="/lancamentos"
-              element={
-                <ComingSoonPage
-                  title="Lançamentos"
-                  subtitle="Lista completa de movimentações"
-                  message="Disponível após importar extratos e faturas."
-                />
-              }
-            />
+            <Route path="/lancamentos" element={<TransactionsPage />} />
             <Route path="/importar" element={<ImportPage />} />
             <Route
               path="/relatorios"

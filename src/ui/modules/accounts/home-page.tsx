@@ -1,18 +1,65 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatCurrentMonthLabel } from '../../components/format-month';
 import { PageHeader } from '../../components/page-header';
-import { RegimeToggle, type Regime } from '../../components/regime-toggle';
+import { RegimeToggle } from '../../components/regime-toggle';
 import { CategoriesSetupBanner } from '../categories/categories-setup-banner';
+import * as transactionsApi from '../transactions/api';
+import { formatMonthLabel, monthBounds, toMonthKey } from '../transactions/month';
+import { useRegime } from '../transactions/regime-context';
+import type { TransactionItem } from '../transactions/types';
 import { OnboardingContinue } from './onboarding-continue';
 import { OnboardingSetupHeader } from './onboarding-setup-header';
 import { SetupPrompt } from './setup-prompt';
 import { useSetupStatus } from './setup-status-context';
 
+function formatAmount(amount: number, type: TransactionItem['type']): string {
+  const signed =
+    type === 'EXPENSE' ? -Math.abs(amount) : type === 'INCOME' ? Math.abs(amount) : amount;
+  return signed.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+}
+
 export function HomePage() {
   const { loading, hasOrigins, isOnboardingComplete, status } =
     useSetupStatus();
-  const [regime, setRegime] = useState<Regime>('competence');
+  const { regime, setRegime } = useRegime();
+  const [recent, setRecent] = useState<TransactionItem[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const month = toMonthKey();
+
+  useEffect(() => {
+    if (!isOnboardingComplete || !hasOrigins) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      setRecentLoading(true);
+      try {
+        const bounds = monthBounds(month);
+        const response = await transactionsApi.listTransactions({
+          regime,
+          from: bounds.from,
+          to: bounds.to,
+        });
+        if (!cancelled) {
+          setRecent(response.items.slice(0, 3));
+        }
+      } catch {
+        if (!cancelled) {
+          setRecent([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setRecentLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnboardingComplete, hasOrigins, regime, month]);
 
   if (loading) {
     return (
@@ -46,7 +93,7 @@ export function HomePage() {
     <section className="page">
       {showCategoriesBanner ? <CategoriesSetupBanner /> : null}
       <PageHeader
-        title={formatCurrentMonthLabel()}
+        title={formatMonthLabel(month)}
         subtitle="Resumo do mês"
         trailing={<RegimeToggle value={regime} onChange={setRegime} />}
       />
@@ -76,7 +123,35 @@ export function HomePage() {
             Ver todos
           </Link>
         </div>
-        <p className="page__empty">Nenhum lançamento importado ainda.</p>
+        {recentLoading ? (
+          <p className="page__empty">Carregando…</p>
+        ) : recent.length === 0 ? (
+          <p className="page__empty">Nenhum lançamento importado ainda.</p>
+        ) : (
+          <ul className="tx-rows">
+            {recent.map((item) => (
+              <li key={item.id} className="tx-row">
+                <span className="tx-row__description" title={item.description}>
+                  {item.description}
+                </span>
+                <span className="tx-row__category">{item.category.name}</span>
+                {item.account ? (
+                  <span className="tx-row__account">
+                    <span className="tx-row__account-label">{item.account.label}</span>
+                    <span className="bank-pill">{item.account.bank.name}</span>
+                  </span>
+                ) : null}
+                <span
+                  className={`tx-row__amount${
+                    item.type === 'EXPENSE' ? ' tx-row__amount--expense' : ''
+                  }`}
+                >
+                  {formatAmount(item.amount, item.type)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </section>
   );
