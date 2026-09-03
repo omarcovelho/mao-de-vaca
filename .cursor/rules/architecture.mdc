@@ -38,7 +38,7 @@ Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `c
 | Camada | Owns |
 |--------|------|
 | `server/modules/accounts/` | CRUD Conta + Cartão + Banco, setup/status |
-| `server/modules/categories/` | CRUD Categoria; unicidade de nome por `userId` |
+| `server/modules/categories/` | CRUD árvore de Categorias (`parentId`, depth ≤5, `kind`, `color`, `icon`); unicidade entre irmãos/folhas; desativação em cascata |
 | `server/modules/import/` | Preview/confirm CSV, parsers, modelo canônico, mapeamento de categorias, dedup, ImportBatch |
 | `server/modules/transactions/` | Lançamentos, tipos, regimes |
 | `server/modules/invoices/` | Faturas (FK cartão), saldo/status derivados, vínculo pagamento |
@@ -52,6 +52,6 @@ Módulos espelhados em `server/modules/` e `ui/modules/`: `auth`, `accounts`, `c
 - Compra-pai **não** entra em somas; só parcelas (RN-03).
 - Fatura sempre vinculada a **Cartão** cadastrado (RN-10).
 - Lançamento referencia **Conta** ou **Cartão** cadastrado — nunca banco solto.
-- Lançamento referencia **Categoria** cadastrada (`categoryId`); importação resolve strings do CSV na confirmação (RN-12).
+- Lançamento referencia **folha** de Categoria cadastrada (`categoryId`); importação resolve strings do CSV na confirmação (RN-12).
 
 Full details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)

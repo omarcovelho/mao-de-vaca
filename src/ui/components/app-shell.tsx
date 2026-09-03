@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: '/importar', label: 'Importar' },
   { to: '/contas', label: 'Contas' },
   { to: '/cartoes', label: 'Cartões' },
+  { to: '/categorias', label: 'Categorias' },
   { to: '/relatorios', label: 'Relatórios' },
 ] as const;
 

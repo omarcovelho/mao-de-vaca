@@ -8,13 +8,14 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  username     String    @unique
+  id           String     @id @default(cuid())
+  username     String     @unique
   passwordHash String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
   banks        Bank[]
   accounts     Account[]
   cards        Card[]
+  categories   Category[]
 }
 
 model Bank {
@@ -58,4 +59,30 @@ model Card {
 
   @@index([userId])
   @@index([bankId])
+}
+
+enum CategoryKind {
+  EXPENSE
+  INCOME
+  NON_EXPENSE
+}
+
+model Category {
+  id        String       @id @default(cuid())
+  userId    String
+  parentId  String?
+  name      String
+  kind      CategoryKind
+  color     String
+  icon      String
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  user      User         @relation(fields: [userId], references: [id])
+  parent    Category?    @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[]   @relation("CategoryTree")
+
+  @@index([userId])
+  @@index([userId, parentId])
+  @@index([userId, name])
 }

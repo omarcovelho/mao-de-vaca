@@ -135,18 +135,18 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Branch sugerida:** `feature/v2-5-categories`
 
-**Resultado para o usuário:** Gerencia categorias em `/categorias` (criar, listar, editar, desativar); após login com lista vazia, é orientado a cadastrar categorias (recomendado, não bloqueia importação).
+**Resultado para o usuário:** Gerencia árvore de categorias em `/categorias` (criar, listar, editar nome/cor/ícone, desativar; profundidade até 5); seed com taxonomia inicial; após login sem categorias, banner recomendando cadastro (não bloqueia importação).
 
 **Entregas verticais:**
 
 | Camada | Escopo |
 |--------|--------|
-| **`src/server/modules/categories/`** | CRUD `Category`; unicidade de `name` por `userId`; desativação (`active: false`); filtro `userId` |
-| **`src/ui/modules/categories/`** | Tela `/categorias`; formulários; CTA no onboarding quando `setup/status.hasCategories` false |
-| **`prisma/`** | `Category` com `userId` |
-| **`src/server/modules/accounts/`** | `GET /api/setup/status` passa a incluir `hasCategories` |
+| **`src/server/modules/categories/`** | CRUD árvore `Category` (`parentId`, `kind`, `color`, `icon`); unicidade entre irmãos + folhas; desativação em cascata; filtro `userId` |
+| **`src/ui/modules/categories/`** | Tela `/categorias` com swatch/ícone; formulários; CTA soft na home quando `hasCategories` false |
+| **`prisma/`** | `Category` + seed da taxonomia MVP (`category-seed-data.js`) |
+| **`src/server/modules/accounts/`** | `GET /api/setup/status` com `hasCategories` real (folhas ativas) |
 
-**Demo:** Cadastrar "Alimentação", "Transporte", "Moradia" → listar → desativar uma → `setup/status.hasCategories` true.
+**Demo:** Seed → `/categorias` mostra Custos fixos, Assinaturas, Renda… → editar cor/ícone → criar filha → desativar → `hasCategories` coerente.
 
 **Mapeia para:** RF-00i–k; RN-11, RN-13; PROJECT_DEFINITION §3.6.
 
@@ -156,10 +156,10 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 | Fase | Resumo |
 |------|--------|
-| A Persistence | Prisma Category |
-| B API | CRUD categorias + hasCategories em setup/status |
-| C UI | Listagem, formulário, sugestão no onboarding |
-| D Sign-off | Demo CRUD + testes de unicidade e desativação |
+| A Persistence | Prisma Category (árvore, cor, ícone) + seed |
+| B API | CRUD + profundidade ≤5 + hasCategories |
+| C UI | Árvore, edição visual, CTA soft |
+| D Sign-off | Demo + testes |
 
 ---
 

@@ -19,7 +19,7 @@ Após login, onboarding **opcional** convida ao cadastro de contas e cartões (p
 ## Notas
 
 - Onboarding é **soft**: não bloqueia a home; skip persiste na sessão (`sessionStorage`).
-- `hasCategories` permanece `false` até V2.5.
+- `hasCategories` is computed from active leaf categories (V2.5).
 - `readyForImport` = `hasAccounts` (forma estável da API); **sem** enforcement de importação neste épico — V3.
 - Contas/cartões desativados ficam fora da listagem padrão (`?includeInactive=true` para incluir).
 - Nome de banco é único por `userId`; duplicata → `409`.

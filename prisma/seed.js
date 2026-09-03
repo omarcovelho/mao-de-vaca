@@ -1,9 +1,74 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
+const { CATEGORY_SEED } = require('./category-seed-data');
 
 const prisma = new PrismaClient();
 
 const DEFAULT_BANKS = ['Nubank', 'Itaú', 'Inter', 'Sofisa', 'Daycoval'];
+
+async function findSibling(userId, parentId, name) {
+  return prisma.category.findFirst({
+    where: {
+      userId,
+      name,
+      parentId: parentId === null ? null : parentId,
+    },
+  });
+}
+
+async function seedCategoriesForUser(userId) {
+  for (const root of CATEGORY_SEED) {
+    let parent = await findSibling(userId, null, root.name);
+    if (!parent) {
+      parent = await prisma.category.create({
+        data: {
+          userId,
+          parentId: null,
+          name: root.name,
+          kind: root.kind,
+          color: root.color,
+          icon: root.icon,
+        },
+      });
+    } else {
+      parent = await prisma.category.update({
+        where: { id: parent.id },
+        data: {
+          kind: root.kind,
+          color: root.color,
+          icon: root.icon,
+          active: true,
+        },
+      });
+    }
+
+    for (const childName of root.children) {
+      const existing = await findSibling(userId, parent.id, childName);
+      if (!existing) {
+        await prisma.category.create({
+          data: {
+            userId,
+            parentId: parent.id,
+            name: childName,
+            kind: root.kind,
+            color: root.color,
+            icon: root.icon,
+          },
+        });
+      } else {
+        await prisma.category.update({
+          where: { id: existing.id },
+          data: {
+            kind: root.kind,
+            color: root.color,
+            icon: root.icon,
+            active: true,
+          },
+        });
+      }
+    }
+  }
+}
 
 async function main() {
   const username = process.env.AUTH_USERNAME;
@@ -36,6 +101,8 @@ async function main() {
       },
     });
   }
+
+  await seedCategoriesForUser(user.id);
 }
 
 main()

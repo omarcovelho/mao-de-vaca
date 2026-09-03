@@ -77,12 +77,15 @@ Cartão de crédito. **Entidade fundacional** — toda fatura e toda compra/esto
 - Agrega **Faturas** (§3.8); o banco do cartão substitui a noção de banco solto nas faturas.
 
 ### 3.6 Categoria
-Classificação analítica dos lançamentos (ex.: "Alimentação", "Transporte"). **Entidade fundacional** — todo lançamento referencia uma Categoria cadastrada.
+Classificação analítica dos lançamentos (ex.: "Alimentação" → "Supermercado"). **Entidade fundacional** — todo lançamento referencia uma **folha** da árvore de categorias cadastrada (nó sem filhos).
 
 - Pertence ao usuário-dono.
-- Atributo conceitual: **nome** (único por usuário).
-- O nome chega no CSV pela ferramenta externa de categorização; na importação, o sistema **mapeia** o texto do CSV para a categoria cadastrada correspondente ou permite **criar** uma nova na pré-visualização.
-- Categorias desativadas não aparecem em novos mapeamentos; lançamentos históricos permanecem.
+- Forma uma **árvore** via categoria pai (`parentId`); profundidade máxima **5** (raiz = 1).
+- Atributos conceituais: **nome**, **cor** (`#RRGGBB`), **ícone** (chave de catálogo fixo), **tipo** (`gasto` / `renda` / `não-despesa` — definido na raiz e herdado pelos filhos).
+- O usuário pode **alterar nome, cor e ícone**; o tipo permanece imutável após a criação.
+- Nome único entre irmãos; nomes de folhas únicos por usuário (para mapeamento na importação).
+- O nome chega no CSV pela ferramenta externa de categorização; na importação, o sistema **mapeia** o texto do CSV para a **folha** correspondente ou permite **criar** uma nova na pré-visualização.
+- Categorias desativadas não aparecem em novos mapeamentos; lançamentos históricos permanecem. Desativar um nó desativa a subárvore.
 
 ### 3.7 Tipos de lançamento
 Três tipos, com semântica distinta:
@@ -221,7 +224,7 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RF-00h** — Após o login, o sistema orienta o usuário ao cadastro de contas/cartões quando ainda não houver nenhum cadastrado (estado vazio).
 
 ### 5.1b Categorias
-- **RF-00i** — O usuário cadastra categorias (nome).
+- **RF-00i** — O usuário cadastra categorias em árvore (nome, cor, ícone; tipo na raiz) e pode **alterar nome, cor e ícone**.
 - **RF-00j** — O usuário lista, edita e pode desativar categorias; categorias com lançamentos vinculados não são removidas fisicamente no MVP (desativação).
 - **RF-00k** — Após o login, o sistema orienta ao cadastro de categorias quando a lista estiver vazia (recomendado; **não bloqueia** importação).
 

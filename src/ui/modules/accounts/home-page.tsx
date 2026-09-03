@@ -3,13 +3,15 @@ import { Link } from 'react-router-dom';
 import { formatCurrentMonthLabel } from '../../components/format-month';
 import { PageHeader } from '../../components/page-header';
 import { RegimeToggle, type Regime } from '../../components/regime-toggle';
+import { CategoriesSetupBanner } from '../categories/categories-setup-banner';
 import { OnboardingContinue } from './onboarding-continue';
 import { OnboardingSetupHeader } from './onboarding-setup-header';
 import { SetupPrompt } from './setup-prompt';
 import { useSetupStatus } from './setup-status-context';
 
 export function HomePage() {
-  const { loading, hasOrigins, isOnboardingComplete } = useSetupStatus();
+  const { loading, hasOrigins, isOnboardingComplete, status } =
+    useSetupStatus();
   const [regime, setRegime] = useState<Regime>('competence');
 
   if (loading) {
@@ -38,8 +40,11 @@ export function HomePage() {
       ? 'Gastos no mês · competência'
       : 'Saídas no mês · caixa';
 
+  const showCategoriesBanner = status?.hasCategories === false;
+
   return (
     <section className="page">
+      {showCategoriesBanner ? <CategoriesSetupBanner /> : null}
       <PageHeader
         title={formatCurrentMonthLabel()}
         subtitle="Resumo do mês"

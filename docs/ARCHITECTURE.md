@@ -118,7 +118,7 @@ Cada domínio (`auth`, `accounts`, `categories`, `import`, `transactions`, `invo
 |--------|-------------------|---------------|
 | **auth** | Login, guard JWT, contexto de tenant | Página de login, proteção de rotas |
 | **accounts** | CRUD Conta + Cartão + Banco, `setup/status` | Cadastro, listagem, onboarding pós-login; seleção/criação de banco |
-| **categories** | CRUD Categoria; unicidade de nome por `userId` | Listagem, formulário, desativação |
+| **categories** | CRUD árvore (depth ≤5), `kind`/`color`/`icon`, unicidade entre irmãos e folhas; `hasCategories` via folhas ativas | `/categorias` com swatch/ícone; CTA soft na home |
 | **import** | Preview/confirm, parsers, deduplicação, mapeamento de categorias, `ImportBatch` | Formulário por modo, pré-visualização com mapeamento, histórico, resumo |
 | **transactions** | CRUD, tipos, regimes, filtros | Tabela filtrável de lançamentos |
 | **invoices** | Faturas, saldo/status derivados, vínculo pagamento | Lista/detalhe de faturas, UI de vínculo manual |
@@ -184,7 +184,7 @@ flowchart LR
 | **Bank** (`Banco`) | PostgreSQL | `id`, `userId`, `name` (único por usuário); seed MVP: Nubank, Itaú, Inter, Sofisa, Daycoval |
 | **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
-| **Category** (`Categoria`) | PostgreSQL | `id`, `userId`, `name` (único por usuário), `active` |
+| **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas** |
 | **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`, `dedupKey` |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** |
 | **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
@@ -207,7 +207,7 @@ flowchart LR
 | **Pré-requisito de importação** | Conta ou cartão cadastrado obrigatório; rejeição sem origem válida (RN-08) |
 | **Origens desativadas** | Não aparecem em nova importação; histórico preservado (RN-09) |
 | **Fatura e cartão** | Fatura sempre vinculada a cartão cadastrado (RN-10) |
-| **Categoria e lançamento** | Todo lançamento referencia `categoryId` de categoria cadastrada (RN-11–13) |
+| **Categoria e lançamento** | Todo lançamento referencia `categoryId` de uma **folha** cadastrada (RN-11–13); profundidade máx. 5 |
 
 ### Regimes: competência vs caixa
 
@@ -409,9 +409,9 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Categorias
 
-- `GET /api/categories` — listar (ativas por padrão)
-- `POST /api/categories` — criar
-- `PATCH /api/categories/:id` — editar/desativar
+- `GET /api/categories` — listar árvore (ativas por padrão); inclui `color`, `icon`, `kind`, `depth`, `isLeaf`, `children`
+- `POST /api/categories` — criar raiz (`name`, `kind`, `color`, `icon`) ou filha (`parentId`; `kind`/cor/ícone herdáveis); rejeita profundidade > 5
+- `PATCH /api/categories/:id` — editar `name`, `color`, `icon` e/ou desativar (`active: false`, cascata na subárvore); `kind` imutável
 
 ### Importação (interface web)
 

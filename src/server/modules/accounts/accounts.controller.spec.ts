@@ -112,6 +112,9 @@ describe('Accounts HTTP', () => {
     await prisma.card.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
+    await prisma.category.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
     await prisma.bank.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
