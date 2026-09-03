@@ -185,11 +185,11 @@ flowchart LR
 | **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas** |
-| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`, `dedupKey` |
+| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?`, `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`, `importBatchId`, `dedupKey`. `importBatchId` identifica o lote de importação (base para um futuro **bulk delete** por importação; não implementado no V3). |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** |
 | **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
 | **ParentPurchase** | PostgreSQL | Agregado informacional; não entra em somas; parcelas vinculadas manualmente |
-| **ImportBatch** | PostgreSQL | `importMode` (`transactions` \| `invoice`), `accountId` ou `cardId`, `invoiceId?`, `parserId`, resultado |
+| **ImportBatch** | PostgreSQL | `importMode` (`transactions` \| `invoice`), `accountId` ou `cardId`, `invoiceId?`, `parserId`, resultado; cada lançamento criado no lote aponta para este `id` |
 
 ### Regras derivadas (do domínio)
 
@@ -244,8 +244,8 @@ Todo parser, independentemente de banco ou formato, produz lançamentos neste mo
 | `competenceDate` | Data de competência |
 | `cashDate` | Data de caixa, quando aplicável (débito: igual à competência) |
 | `description` | Descrição do lançamento |
-| `amount` | Valor (negativo = despesa/estorno; positivo = receita) |
-| `type` | `expense` \| `income` \| `transfer` |
+| `amount` | Valor signed do CSV: **negativo = despesa/estorno; positivo = receita** (contrato do parser padrão) |
+| `type` | `EXPENSE` \| `INCOME` \| `TRANSFER` (enum persistido; o parser deriva EXPENSE/INCOME do sinal; `TRANSFER` só com coluna opcional `tipo`) |
 | `category` | Nome da categoria pré-atribuída no CSV (string do parser; resolvida para `categoryId` na confirmação) |
 | `accountId` | Conta cadastrada (modo transações) — mutuamente exclusivo com `cardId` |
 | `cardId` | Cartão cadastrado (modo fatura) |
@@ -347,9 +347,13 @@ sequenceDiagram
 
 - Upload via `multipart/form-data` (NestJS `FileInterceptor`); limite configurável (ex.: 10 MB)
 - CSV **não persistido em disco** no MVP — processado em memória; metadados em `ImportBatch`
-- `GET /api/imports/options` — modos, parsers, contas/cartões/faturas/categorias ativos
+- `GET /api/imports/options` — V3: modos, parsers, contas ativas (faturas/cartões no V4)
+- Preview e confirm são **multipart** (arquivo reenviado no confirm; sem cache de preview)
 - Importação **síncrona** no MVP; sem fila nem SSE
 - `categoryMappings`: `Record<string, categoryId | { create: { name } }>` — chave é o texto do CSV
+- Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-padrao.csv`
+- `dedupKey`: SHA-256 de `accountId|competenceDate|amount|descrição normalizada` (único por `userId`)
+- Transferência em dois extratos: dois lançamentos independentes até vínculo manual futuro
 
 ### 6.2 Vínculo manual pagamento ↔ fatura
 
@@ -415,11 +419,10 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Importação (interface web)
 
-- `GET /api/imports/options` — modos, parsers, contas/cartões/faturas/categorias ativos
-- `POST /api/imports/preview` — `multipart/form-data`: `importMode` + `accountId` | (`cardId` + `invoiceId`) + `parserId` + `file` → `{ rows, unknownCategories[], summary }`
-- `POST /api/imports/confirm` — body JSON: metadados do lote + `categoryMappings` → `{ created, skipped, errors[] }`
+- `GET /api/imports/options` — modos, parsers, contas ativas (V3)
+- `POST /api/imports/preview` — `multipart/form-data`: `importMode` + `accountId` + `parserId` + `file` → `{ rows, unknownCategories[], summary }` (não persiste)
+- `POST /api/imports/confirm` — mesmo multipart + `categoryMappings` (JSON string) → `{ id, importBatchId, created, skipped, errors[] }` (cada `Transaction` gravada com o mesmo `importBatchId`)
 - `GET /api/imports` — histórico de importações
-- `GET /api/imports/:id` — detalhe de uma importação (opcional no MVP)
 
 ### Lançamentos
 
@@ -514,10 +517,8 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 
 | Tópico | Notas |
 |--------|-------|
-| Parsers iniciais | Quais bancos/formatos CSV no primeiro sprint |
-| Estratégia de `dedupKey` | Hash de (data + valor + descrição + origem) vs campo do CSV |
-| Biblioteca de gráficos | Recharts vs Chart.js para evolução mensal |
-| Plugin Vite no NestJS | Integrado vs proxy separado em dev |
+| Biblioteca de gráficos | Recharts vs Chart.js para evolução mensal (V7) |
+| Vínculo manual de transferências entre contas | Fora do V3; ver backlog MVP+ |
 
 ---
 
@@ -537,4 +538,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 |------|-----------|
 | 2026-09-01 | Versão inicial: app web único, `src/server/` + `src/ui/`, importação via UI, regimes competência/caixa |
 | 2026-09-01 | Cadastro de contas/cartões como requisito fundacional; importação por modo com parser; módulo `accounts` |
-| 2026-09-02 | Cadastro de categorias (`categories`); `categoryId` em Transaction; importação em duas fases (preview/confirm) com mapeamento |
+| 2026-09-03 | V3 import conta: parser padrão (sinal → tipo), preview/confirm multipart, dedupKey, transferências em dois arquivos |

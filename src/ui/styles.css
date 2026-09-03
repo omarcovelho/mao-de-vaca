@@ -786,6 +786,108 @@ a {
   gap: 0.5rem;
 }
 
+.pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.form-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.import-form {
+  max-width: 440px;
+  margin-bottom: 2rem;
+}
+
+.import-dropzone {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  width: 100%;
+  padding: 2rem 1.25rem;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+
+.import-dropzone strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.import-preview-list,
+.import-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.import-preview-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.import-preview-row__text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-history li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.import-history li strong {
+  font-weight: 600;
+}
+
+.import-preview-row__meta,
+.import-history li span {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.import-preview-row__amount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.import-preview-row__amount--expense {
+  color: var(--danger);
+}
+
+.import-mapping {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.import-mapping legend {
+  font-weight: 600;
+  padding: 0 0.35rem;
+}
+
 @media (max-width: 720px) {
   .app-layout {
     grid-template-columns: 1fr;

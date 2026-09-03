@@ -75,9 +75,11 @@ Login (`/login`) e onboarding ficam fora da sidebar.
 - Lista simples (descrição, categoria · data, valor); sem tabela densa.
 
 ### Importar
-- Tipo: pills “Extrato de conta” / “Fatura de cartão”.
-- Select de origem (conta ou cartão cadastrado).
+- Tipo: pills “Extrato de conta” / “Fatura de cartão” (fatura desabilitada até V4).
+- Select de origem (conta ativa) e parser (Padrão).
 - Zona de drag-and-drop para CSV + “Pré-visualizar”.
+- Pré-visualização com valores signed, tipo derivado, categorias desconhecidas (mapear ou criar) e “Confirmar importação”.
+- Resumo (criados / ignorados) e histórico de lotes.
 
 ### Contas
 - Apenas contas bancárias (corrente, poupança).

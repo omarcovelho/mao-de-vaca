@@ -97,6 +97,8 @@ Três tipos, com semântica distinta:
   - **Investimento** (aporte/resgate — ver 3.11);
   - e, de forma geral, qualquer movimentação entre as próprias contas do usuário.
 
+**Transferência entre contas próprias no extrato:** o mesmo movimento costuma aparecer em **dois CSVs** — por exemplo, saída na Itaú como valor negativo (despesa no parser) e entrada na Nubank como valor positivo (receita). No MVP cada arquivo é importado de forma independente (dois lançamentos, um por conta); não há casamento automático. Uma versão futura deve permitir **vínculo manual** das duas pernas (mesmo espírito do pagamento de fatura).
+
 Essa distinção é o que impede a **contagem duplicada**: as compras de cartão já são reconhecidas como despesa item a item na fatura; o pagamento da fatura, sendo transferência, move o caixa sem reintroduzir o gasto.
 
 ### 3.8 Fatura (como passivo)
@@ -199,6 +201,7 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - Detecção automática de banco/tipo de arquivo ou de conta na importação.
 - Dedução automática de parcelamento a partir da descrição.
 - Casamento/dedução automática de pagamento ↔ fatura, ou estorno ↔ compra original.
+- Vínculo manual entre pernas de transferência importadas em extratos de contas distintas (despesa num arquivo, receita no outro).
 - Retroação de competência de estornos; cancelamento automático de parcelas futuras.
 - Controle de investimentos: rendimento, posição, custo, performance.
 - Orçamentos, metas, comparação competência × caixa lado a lado, e multi-moeda.
@@ -316,6 +319,7 @@ A abstração central do sistema: **todo parser produz lançamentos no mesmo mod
 Itens conscientemente deixados de fora do MVP, candidatos a versões futuras:
 - Parcelamento com **reconhecimento integral na compra** (a compra é reconhecida por inteiro na competência da data da compra, com o caixa distribuído pelas faturas seguintes), como alternativa ao registro distribuído por parcela adotado no MVP.
 - Dedução automática de parcelamento, e casamento automático de pagamento ↔ fatura e estorno ↔ compra original.
+- Vínculo **manual** entre lançamentos que representam as duas pernas de uma transferência entre contas próprias (importadas em arquivos distintos).
 - Retroação de competência de estornos.
 - Controle de investimentos (rendimento, posição, performance).
 - Orçamentos e metas; comparação competência × caixa lado a lado; multi-moeda.
