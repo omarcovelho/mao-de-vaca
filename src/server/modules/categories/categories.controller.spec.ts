@@ -75,12 +75,24 @@ describe('Categories HTTP', () => {
   });
 
   beforeEach(async () => {
+    await prisma.transaction.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
+    await prisma.importBatch.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
     await prisma.category.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
   });
 
   afterAll(async () => {
+    await prisma.transaction.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
+    await prisma.importBatch.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
     await prisma.category.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });

@@ -15,7 +15,9 @@ model User {
   banks        Bank[]
   accounts     Account[]
   cards        Card[]
-  categories   Category[]
+  categories    Category[]
+  transactions  Transaction[]
+  importBatches ImportBatch[]
 }
 
 model Bank {
@@ -39,8 +41,10 @@ model Account {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  bank      Bank     @relation(fields: [bankId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  bank         Bank          @relation(fields: [bankId], references: [id])
+  transactions Transaction[]
+  importBatches ImportBatch[]
 
   @@index([userId])
   @@index([bankId])
@@ -80,9 +84,65 @@ model Category {
   updatedAt DateTime     @updatedAt
   user      User         @relation(fields: [userId], references: [id])
   parent    Category?    @relation("CategoryTree", fields: [parentId], references: [id])
-  children  Category[]   @relation("CategoryTree")
+  children     Category[]     @relation("CategoryTree")
+  transactions Transaction[]
 
   @@index([userId])
   @@index([userId, parentId])
   @@index([userId, name])
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+enum ImportMode {
+  TRANSACTIONS
+  INVOICE
+}
+
+model ImportBatch {
+  id           String     @id @default(cuid())
+  userId       String
+  importMode   ImportMode
+  accountId    String?
+  parserId     String
+  fileName     String
+  createdCount Int
+  skippedCount Int
+  errorCount   Int
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id])
+  account      Account?   @relation(fields: [accountId], references: [id])
+  transactions Transaction[]
+
+  @@index([userId])
+  @@index([accountId])
+}
+
+model Transaction {
+  id             String          @id @default(cuid())
+  userId         String
+  competenceDate DateTime        @db.Date
+  cashDate       DateTime        @db.Date
+  description    String
+  amount         Decimal         @db.Decimal(14, 2)
+  type           TransactionType
+  categoryId     String
+  accountId      String?
+  importBatchId  String
+  dedupKey       String
+  createdAt      DateTime        @default(now())
+  user           User            @relation(fields: [userId], references: [id])
+  category       Category        @relation(fields: [categoryId], references: [id])
+  account        Account?        @relation(fields: [accountId], references: [id])
+  importBatch    ImportBatch     @relation(fields: [importBatchId], references: [id])
+
+  @@unique([userId, dedupKey])
+  @@index([userId])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([importBatchId])
 }

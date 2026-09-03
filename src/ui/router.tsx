@@ -8,6 +8,7 @@ import { HomePage } from './modules/accounts/home-page';
 import { LoginPage } from './modules/auth/login-page';
 import { ProtectedRoute } from './modules/auth/protected-route';
 import { CategoriesPage } from './modules/categories/categories-page';
+import { ImportPage } from './modules/import/import-page';
 
 export function AppRouter() {
   return (
@@ -30,16 +31,7 @@ export function AppRouter() {
                 />
               }
             />
-            <Route
-              path="/importar"
-              element={
-                <ComingSoonPage
-                  title="Importar"
-                  subtitle="Envie um CSV do seu banco ou cartão"
-                  message="A importação de extratos e faturas será habilitada nos próximos épicos."
-                />
-              }
-            />
+            <Route path="/importar" element={<ImportPage />} />
             <Route
               path="/relatorios"
               element={

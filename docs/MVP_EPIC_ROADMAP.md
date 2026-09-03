@@ -184,7 +184,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Depende de:** V2 (conta cadastrada), **V2.5 (módulo de categorias)**.
 
-**Notas:** Regime de caixa = competência para lançamentos de conta neste épico. Parser padrão pode ser CSV genérico documentado com exemplo em `docs/fixtures/`.
+**Notas:** Regime de caixa = competência para lançamentos de conta neste épico. Parser padrão: CSV `data,descricao,valor,categoria` (ver `docs/fixtures/extrato-conta-padrao.csv`). Valor negativo → despesa; positivo → receita. Transferência entre contas em dois arquivos permanece como dois lançamentos até vínculo manual (backlog).
 
 ---
 
@@ -364,6 +364,8 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 - Multi-moeda
 - Multitenant ativo (cadastro de usuários)
 - Fila assíncrona para importações grandes
+- Vínculo manual de transferências entre contas (duas pernas em extratos distintos)
+- Bulk delete de lançamentos por `importBatchId` (desfazer um lote de importação)
 
 ---
 
@@ -372,11 +374,10 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | Decisão | Resolver em |
 |---------|-------------|
 | Plugin Vite no NestJS vs proxy em dev | V0 |
-| Estratégia de `dedupKey` | V3 |
-| Formato do parser padrão (colunas CSV) | V3 |
-| Resolução `categoryMappings` na confirmação | V3 |
-| Biblioteca de gráficos | V7 |
-| `dedupKey` inclui `accountId`/`cardId`? | V3 |
+| Estratégia de `dedupKey` | V3 (fechada: SHA-256 accountId+data+valor+descrição) |
+| Formato do parser padrão (colunas CSV) | V3 (fechada: `data,descricao,valor,categoria`) |
+| Resolução `categoryMappings` na confirmação | V3 (fechada: multipart + mappings; create ou categoryId) |
+| `dedupKey` inclui `accountId`/`cardId`? | V3 (sim, `accountId`) |
 
 ---
 

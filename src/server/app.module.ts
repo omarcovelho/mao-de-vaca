@@ -3,7 +3,9 @@ import { HealthModule } from './health/health.module';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { ImportModule } from './modules/import/import.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { TransactionsModule } from './modules/transactions/transactions.module';
 
 @Module({
   imports: [
@@ -12,6 +14,8 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     AccountsModule,
     CategoriesModule,
+    TransactionsModule,
+    ImportModule,
   ],
 })
 export class AppModule {}
