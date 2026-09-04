@@ -162,7 +162,7 @@ describe('Transactions UI flow', () => {
     });
   });
 
-  it('changes category inline and can deactivate a row', async () => {
+  it('changes category via modal and can deactivate a row', async () => {
     const user = userEvent.setup();
     const month = toMonthKey();
     const bounds = monthBounds(month);
@@ -252,7 +252,9 @@ describe('Transactions UI flow', () => {
     expect(await screen.findByText('Cinema')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Alimentação' }));
 
-    await chooseSearchableOption(user, 'Categoria de Cinema', /Lazer/);
+    const categoryDialog = screen.getByRole('dialog', { name: 'Alterar categoria' });
+    await chooseSearchableOption(user, 'Categoria', /Lazer/);
+    await user.click(within(categoryDialog).getByRole('button', { name: 'Salvar' }));
 
     expect(await screen.findByRole('button', { name: 'Lazer' })).toBeInTheDocument();
 

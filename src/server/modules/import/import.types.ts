@@ -3,7 +3,7 @@ export type ImportModeApi = 'transactions' | 'invoice';
 export type CategoryMappingValue =
   | string
   | {
-      create: { name: string };
+      create: { name: string; parentId?: string | null };
     };
 
 export type CategoryMappings = Record<string, CategoryMappingValue>;

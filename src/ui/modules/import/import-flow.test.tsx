@@ -214,9 +214,12 @@ describe('Import UI flow', () => {
 
     await user.click(screen.getByRole('button', { name: 'Pré-visualizar' }));
 
-    expect(await screen.findByText('Cinema')).toBeInTheDocument();
+    expect(await screen.findAllByText('Cinema')).not.toHaveLength(0);
     expect(
       screen.getByRole('heading', { name: 'Categorias desconhecidas' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Categoria não encontrada/),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('checkbox', { name: /Importar linha 2/i }),
@@ -224,6 +227,20 @@ describe('Import UI flow', () => {
     expect(
       screen.getByRole('checkbox', { name: /Importar linha 3/i }),
     ).toBeChecked();
+
+    expect(
+      screen.getByRole('button', { name: 'Confirmar importação' }),
+    ).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Criar' }));
+    expect(
+      screen.getByRole('dialog', { name: 'Nova categoria' }),
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Lazer')).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    expect(
+      screen.getByText(/Criar “Lazer” como categoria raiz/),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Confirmar importação' }));
     expect(

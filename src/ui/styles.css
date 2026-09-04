@@ -1355,13 +1355,80 @@ a {
 .import-mapping {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0.75rem 1rem 1rem;
+  padding: 0.85rem 1rem 1rem;
   margin: 0 0 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--surface);
 }
 
-.import-mapping legend {
+.import-mapping__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.import-mapping__status {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--status-warning-text);
+}
+
+.import-mapping__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.import-mapping__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.import-mapping__row-meta {
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.import-mapping__row-amount {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
-  padding: 0 0.35rem;
+}
+
+.import-mapping__row-amount--expense {
+  color: var(--danger);
+}
+
+.import-mapping__picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.import-mapping__create {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.import-mapping__create .form-hint {
+  margin: 0;
+  flex: 1;
+  min-width: 12rem;
 }
 
 @media (max-width: 720px) {

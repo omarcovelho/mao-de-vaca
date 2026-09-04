@@ -5,6 +5,7 @@ import {
   type CategoryLeafOption,
 } from '../../components/category-leaves';
 import { ConfirmModal } from '../../components/confirm-modal';
+import { MapExistingCategoryModal } from '../../components/map-existing-category-modal';
 import { PageHeader } from '../../components/page-header';
 import {
   AccountOriginIcon,
@@ -64,7 +65,12 @@ export function TransactionsPage() {
   const [leaves, setLeaves] = useState<CategoryLeafOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [categoryEdit, setCategoryEdit] = useState<{
+    id: string;
+    description: string;
+    type: TransactionItem['type'];
+    categoryId: string;
+  } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
 
@@ -176,7 +182,7 @@ export function TransactionsPage() {
             : item,
         ),
       );
-      setEditingId(null);
+      setCategoryEdit(null);
       toast.success('Categoria atualizada.');
     } catch (err) {
       const message =
@@ -222,6 +228,23 @@ export function TransactionsPage() {
   }
 
   const deactivateTarget = items.find((item) => item.id === deactivateId);
+
+  const categoryEditOptions = useMemo(() => {
+    if (!categoryEdit) {
+      return [];
+    }
+    return leaves
+      .filter((leaf) => {
+        if (categoryEdit.type === 'EXPENSE') {
+          return leaf.kind === 'EXPENSE';
+        }
+        if (categoryEdit.type === 'INCOME') {
+          return leaf.kind === 'INCOME';
+        }
+        return true;
+      })
+      .map((leaf) => ({ value: leaf.value, label: leaf.label }));
+  }, [categoryEdit, leaves]);
 
   return (
     <section className="page">
@@ -324,44 +347,27 @@ export function TransactionsPage() {
         <p className="page__empty">Nenhum lançamento neste período.</p>
       ) : (
         <ul className="tx-rows">
-          {items.map((item) => {
-            const leafOptions = leaves
-              .filter((leaf) => {
-                if (item.type === 'EXPENSE') {
-                  return leaf.kind === 'EXPENSE';
-                }
-                if (item.type === 'INCOME') {
-                  return leaf.kind === 'INCOME';
-                }
-                return true;
-              })
-              .map((leaf) => ({ value: leaf.value, label: leaf.label }));
-            return (
+          {items.map((item) => (
               <li key={item.id} className="tx-row">
                 <span className="tx-row__date">{formatDay(item.displayDate)}</span>
                 <span className="tx-row__description" title={item.description}>
                   {item.description}
                 </span>
-                {editingId === item.id ? (
-                  <SearchableSelect
-                    className="tx-row__category-select"
-                    aria-label={`Categoria de ${item.description}`}
-                    options={leafOptions}
-                    value={item.category.id}
-                    disabled={busyId === item.id}
-                    onChange={(value) => {
-                      void handleCategoryChange(item.id, value);
-                    }}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    className="tx-row__category linkish"
-                    onClick={() => setEditingId(item.id)}
-                  >
-                    {item.category.name}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="tx-row__category linkish"
+                  disabled={busyId === item.id}
+                  onClick={() =>
+                    setCategoryEdit({
+                      id: item.id,
+                      description: item.description,
+                      type: item.type,
+                      categoryId: item.category.id,
+                    })
+                  }
+                >
+                  {item.category.name}
+                </button>
                 {item.card && item.invoiceId ? (
                   <Link
                     to={`/cartoes?invoiceId=${item.invoiceId}`}
@@ -415,10 +421,41 @@ export function TransactionsPage() {
                   Desativar
                 </button>
               </li>
-            );
-          })}
+            ))}
         </ul>
       )}
+
+      <MapExistingCategoryModal
+        open={categoryEdit !== null}
+        title="Alterar categoria"
+        description={
+          categoryEdit ? (
+            <p className="form-hint" style={{ margin: 0 }}>
+              Escolha a categoria de <strong>{categoryEdit.description}</strong>.
+            </p>
+          ) : null
+        }
+        categoryId={categoryEdit?.categoryId ?? ''}
+        options={categoryEditOptions}
+        confirmLabel="Salvar"
+        busy={busyId === categoryEdit?.id}
+        onCategoryIdChange={(nextCategoryId) => {
+          setCategoryEdit((current) =>
+            current ? { ...current, categoryId: nextCategoryId } : current,
+          );
+        }}
+        onCancel={() => {
+          if (busyId !== categoryEdit?.id) {
+            setCategoryEdit(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!categoryEdit?.categoryId) {
+            return;
+          }
+          void handleCategoryChange(categoryEdit.id, categoryEdit.categoryId);
+        }}
+      />
 
       <ConfirmModal
         open={deactivateId !== null}

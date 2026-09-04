@@ -86,4 +86,4 @@ export type ImportHistoryItem = {
 
 export type CategoryMappingValue =
   | string
-  | { create: { name: string } };
+  | { create: { name: string; parentId?: string | null } };

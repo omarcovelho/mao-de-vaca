@@ -627,18 +627,31 @@ export class ImportService {
       throw new BadRequestException('Nome da nova categoria é obrigatório');
     }
 
+    const parentId =
+      typeof mapping.create?.parentId === 'string' && mapping.create.parentId.trim()
+        ? mapping.create.parentId.trim()
+        : null;
+
     const already = leafByName(leaves, name);
     if (already) {
       return already.id;
     }
 
     try {
-      const created = await this.categoriesService.create(userId, {
-        name,
-        kind: 'EXPENSE',
-        color: DEFAULT_CREATED_CATEGORY_COLOR,
-        icon: DEFAULT_CREATED_CATEGORY_ICON,
-      });
+      const created = await this.categoriesService.create(
+        userId,
+        parentId
+          ? {
+              name,
+              parentId,
+            }
+          : {
+              name,
+              kind: 'EXPENSE',
+              color: DEFAULT_CREATED_CATEGORY_COLOR,
+              icon: DEFAULT_CREATED_CATEGORY_ICON,
+            },
+      );
       leaves.push(created);
       return created.id;
     } catch (error) {

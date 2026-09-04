@@ -1,12 +1,15 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { flattenCategoryLeaves } from '../../components/category-leaves';
-import type { CategoryLeafOption } from '../../components/category-leaves';
+import { flattenCategoryLeaves, flattenCategoryParents, findCategoryLabel } from '../../components/category-leaves';
+import type { CategoryLeafOption, CategoryNodeOption } from '../../components/category-leaves';
 import { ConfirmModal } from '../../components/confirm-modal';
+import { CreateImportCategoryModal } from '../../components/create-import-category-modal';
+import { MapExistingCategoryModal } from '../../components/map-existing-category-modal';
 import { PageHeader } from '../../components/page-header';
 import { SearchableSelect } from '../../components/searchable-select';
 import { useToast } from '../../components/toast';
 import { listCategories } from '../categories/api';
+import type { Category } from '../categories/types';
 import * as importApi from './api';
 import type {
   CategoryMappingValue,
@@ -30,15 +33,12 @@ const WARNING_LABELS = {
   within_file: 'Possível duplicata no arquivo',
 } as const;
 
-const MAPPING_MODE_OPTIONS = [
-  { value: 'create', label: 'Criar nova' },
-  { value: 'existing', label: 'Usar existente' },
-];
-
 type MappingDraft = {
-  mode: 'existing' | 'create';
+  mode: 'pending' | 'existing' | 'create';
   categoryId: string;
   name: string;
+  parentId: string;
+  createConfigured: boolean;
 };
 
 function mappingsReady(
@@ -47,13 +47,13 @@ function mappingsReady(
 ): boolean {
   return unknown.every((name) => {
     const draft = drafts[name];
-    if (!draft) {
+    if (!draft || draft.mode === 'pending') {
       return false;
     }
     if (draft.mode === 'existing') {
       return Boolean(draft.categoryId);
     }
-    return Boolean(draft.name.trim());
+    return draft.createConfigured && Boolean(draft.name.trim());
   });
 }
 
@@ -64,15 +64,31 @@ function toCategoryMappings(
   const mappings: Record<string, CategoryMappingValue> = {};
   for (const name of unknown) {
     const draft = drafts[name];
-    if (!draft) {
+    if (!draft || draft.mode === 'pending') {
       continue;
     }
-    mappings[name] =
-      draft.mode === 'existing'
-        ? draft.categoryId
-        : { create: { name: draft.name.trim() } };
+    if (draft.mode === 'existing') {
+      mappings[name] = draft.categoryId;
+      continue;
+    }
+    mappings[name] = {
+      create: {
+        name: draft.name.trim(),
+        ...(draft.parentId ? { parentId: draft.parentId } : {}),
+      },
+    };
   }
   return mappings;
+}
+
+function emptyPendingDraft(name: string): MappingDraft {
+  return {
+    mode: 'pending',
+    categoryId: '',
+    name,
+    parentId: '',
+    createConfigured: false,
+  };
 }
 
 function formatMonth(isoDate: string): string {
@@ -129,6 +145,7 @@ export function ImportPage() {
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [history, setHistory] = useState<ImportHistoryItem[]>([]);
   const [leaves, setLeaves] = useState<CategoryLeafOption[]>([]);
+  const [parentOptions, setParentOptions] = useState<CategoryNodeOption[]>([]);
   const [importMode, setImportMode] = useState<ImportModeId>('transactions');
   const [accountId, setAccountId] = useState('');
   const [cardId, setCardId] = useState('');
@@ -148,6 +165,17 @@ export function ImportPage() {
   const [deleteTarget, setDeleteTarget] = useState<ImportHistoryItem | null>(
     null,
   );
+  const [createModalName, setCreateModalName] = useState<string | null>(null);
+  const [createModalParentId, setCreateModalParentId] = useState('');
+  const [existingModalName, setExistingModalName] = useState<string | null>(
+    null,
+  );
+  const [existingModalCategoryId, setExistingModalCategoryId] = useState('');
+
+  function applyCategoryTree(tree: Category[]) {
+    setLeaves(flattenCategoryLeaves(tree));
+    setParentOptions(flattenCategoryParents(tree));
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -163,7 +191,7 @@ export function ImportPage() {
         }
         setOptions(nextOptions);
         setHistory(nextHistory);
-        setLeaves(flattenCategoryLeaves(tree));
+        applyCategoryTree(tree);
         setParserId(nextOptions.parsers[0]?.id ?? 'standard');
         setAccountId((current) => current || nextOptions.accounts[0]?.id || '');
         const cards = nextOptions.cards ?? [];
@@ -367,10 +395,7 @@ export function ImportPage() {
       setSelectedLines(defaultSelectedLines(next.rows));
       setDrafts(
         Object.fromEntries(
-          next.unknownCategories.map((name) => [
-            name,
-            { mode: 'create' as const, categoryId: '', name },
-          ]),
+          next.unknownCategories.map((name) => [name, emptyPendingDraft(name)]),
         ),
       );
     } catch {
@@ -411,7 +436,7 @@ export function ImportPage() {
       setResult(next);
       setHistory(await importApi.listImportHistory());
       setOptions(await importApi.getImportOptions());
-      setLeaves(flattenCategoryLeaves(await listCategories()));
+      applyCategoryTree(await listCategories());
       clearWorkingState();
       setConfirmImportOpen(false);
       toast.success(`Importação concluída: ${formatResultSummary(next)}`);
@@ -740,65 +765,149 @@ export function ImportPage() {
               <h3 className="section__title">Categorias desconhecidas</h3>
               {preview.unknownCategories.map((name) => {
                 const draft = drafts[name];
+                const displayName = name || '(sem categoria)';
+                const relatedRows = preview.rows.filter(
+                  (row) => !row.error && (row.category ?? '') === name,
+                );
                 return (
-                  <fieldset key={name} className="import-mapping">
-                    <legend>{name || '(sem categoria)'}</legend>
-                    <label>
-                      Ação
-                      <SearchableSelect
-                        aria-label={`Ação para ${name || 'sem categoria'}`}
-                        options={MAPPING_MODE_OPTIONS}
-                        value={draft?.mode ?? 'create'}
-                        onChange={(value) =>
-                          setDrafts((current) => ({
-                            ...current,
-                            [name]: {
-                              mode: value as MappingDraft['mode'],
-                              categoryId: current[name]?.categoryId ?? '',
-                              name: current[name]?.name ?? name,
-                            },
-                          }))
-                        }
-                      />
-                    </label>
-                    {draft?.mode === 'existing' ? (
-                      <label>
-                        Categoria
-                        <SearchableSelect
-                          aria-label={`Categoria existente para ${name || 'sem categoria'}`}
-                          options={leafOptions}
-                          value={draft.categoryId}
-                          onChange={(value) =>
+                  <section
+                    key={name}
+                    className="import-mapping"
+                    aria-labelledby={`unknown-cat-${name || 'empty'}`}
+                  >
+                    <div className="import-mapping__header">
+                      <p
+                        id={`unknown-cat-${name || 'empty'}`}
+                        className="import-mapping__status"
+                        role="status"
+                      >
+                        Categoria não encontrada:{' '}
+                        <strong>{displayName}</strong>
+                      </p>
+                      <div
+                        className="pill-group"
+                        role="group"
+                        aria-label={`Resolver ${displayName}`}
+                      >
+                        <button
+                          type="button"
+                          className={`pill${
+                            draft?.mode === 'create' && draft.createConfigured
+                              ? ' pill--active'
+                              : ''
+                          }`}
+                          onClick={() => {
                             setDrafts((current) => ({
                               ...current,
                               [name]: {
-                                ...current[name],
-                                categoryId: value,
-                              },
-                            }))
-                          }
-                          placeholder="Selecione"
-                        />
-                      </label>
-                    ) : (
-                      <label>
-                        Nome da nova categoria
-                        <input
-                          value={draft?.name ?? name}
-                          onChange={(event) =>
-                            setDrafts((current) => ({
-                              ...current,
-                              [name]: {
+                                ...(current[name] ?? emptyPendingDraft(name)),
                                 mode: 'create',
                                 categoryId: '',
-                                name: event.target.value,
+                                name,
                               },
-                            }))
-                          }
-                        />
-                      </label>
-                    )}
-                  </fieldset>
+                            }));
+                            setCreateModalParentId(
+                              drafts[name]?.parentId ?? '',
+                            );
+                            setCreateModalName(name);
+                          }}
+                        >
+                          Criar
+                        </button>
+                        <button
+                          type="button"
+                          className={`pill${
+                            draft?.mode === 'existing' && draft.categoryId
+                              ? ' pill--active'
+                              : ''
+                          }`}
+                          onClick={() => {
+                            setExistingModalCategoryId(
+                              drafts[name]?.mode === 'existing'
+                                ? (drafts[name]?.categoryId ?? '')
+                                : '',
+                            );
+                            setExistingModalName(name);
+                          }}
+                        >
+                          Usar atual
+                        </button>
+                      </div>
+                    </div>
+
+                    {relatedRows.length > 0 ? (
+                      <ul className="import-mapping__rows">
+                        {relatedRows.map((row) => (
+                          <li key={row.line} className="import-mapping__row">
+                            <span className="import-mapping__row-desc">
+                              {row.description}
+                              <span className="import-mapping__row-meta">
+                                {' '}
+                                · {row.competenceDate}
+                                {row.type ? ` · ${TYPE_LABELS[row.type]}` : ''}
+                              </span>
+                            </span>
+                            <span
+                              className={
+                                row.amount?.startsWith('-')
+                                  ? 'import-mapping__row-amount import-mapping__row-amount--expense'
+                                  : 'import-mapping__row-amount'
+                              }
+                            >
+                              {row.amount}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+
+                    {draft?.mode === 'existing' && draft.categoryId ? (
+                      <div className="import-mapping__create">
+                        <p className="form-hint">
+                          Usar “
+                          {findCategoryLabel(leafOptions, draft.categoryId) ??
+                            'categoria selecionada'}
+                          ” para “{displayName}”
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--compact"
+                          onClick={() => {
+                            setExistingModalCategoryId(draft.categoryId);
+                            setExistingModalName(name);
+                          }}
+                        >
+                          Alterar
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {draft?.mode === 'create' && draft.createConfigured ? (
+                      <div className="import-mapping__create">
+                        <p className="form-hint">
+                          {draft.parentId
+                            ? `Criar “${displayName}” em ${findCategoryLabel(parentOptions, draft.parentId) ?? 'categoria selecionada'}`
+                            : `Criar “${displayName}” como categoria raiz`}
+                        </p>
+                        <button
+                          type="button"
+                          className="btn btn--secondary btn--compact"
+                          onClick={() => {
+                            setCreateModalParentId(draft.parentId);
+                            setCreateModalName(name);
+                          }}
+                        >
+                          Alterar
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {draft?.mode === 'create' && !draft.createConfigured ? (
+                      <p className="form-hint">
+                        Confirme a criação no modal para continuar.
+                      </p>
+                    ) : null}
+                  </section>
                 );
               })}
             </div>
@@ -871,6 +980,69 @@ export function ImportPage() {
           </ul>
         )}
       </section>
+
+      <CreateImportCategoryModal
+        open={createModalName !== null}
+        categoryName={
+          createModalName === null
+            ? ''
+            : createModalName || '(sem categoria)'
+        }
+        parentId={createModalParentId}
+        parentOptions={parentOptions.map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))}
+        onParentIdChange={setCreateModalParentId}
+        onCancel={() => setCreateModalName(null)}
+        onConfirm={() => {
+          if (createModalName === null) {
+            return;
+          }
+          const csvName = createModalName;
+          setDrafts((current) => ({
+            ...current,
+            [csvName]: {
+              mode: 'create',
+              categoryId: '',
+              name: csvName,
+              parentId: createModalParentId,
+              createConfigured: true,
+            },
+          }));
+          setCreateModalName(null);
+        }}
+      />
+
+      <MapExistingCategoryModal
+        open={existingModalName !== null}
+        categoryName={
+          existingModalName === null
+            ? ''
+            : existingModalName || '(sem categoria)'
+        }
+        categoryId={existingModalCategoryId}
+        options={leafOptions}
+        onCategoryIdChange={setExistingModalCategoryId}
+        onCancel={() => setExistingModalName(null)}
+        onConfirm={() => {
+          if (existingModalName === null || !existingModalCategoryId) {
+            return;
+          }
+          const csvName = existingModalName;
+          setDrafts((current) => ({
+            ...current,
+            [csvName]: {
+              mode: 'existing',
+              categoryId: existingModalCategoryId,
+              name: csvName,
+              parentId: '',
+              createConfigured: false,
+            },
+          }));
+          setExistingModalName(null);
+        }}
+      />
 
       <ConfirmModal
         open={confirmImportOpen}
