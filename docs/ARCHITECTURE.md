@@ -1,7 +1,7 @@
 # Mão de Vaca — Arquitetura do MVP
 
 **Status:** Rascunho para planejamento de implementação  
-**Última atualização:** 2026-09-03  
+**Última atualização:** 2026-09-04  
 **Fonte de verdade do produto:** [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD)
 
 Este documento descreve *como* o MVP é construído em alto nível. Histórias de usuário, épicos e tarefas devem rastrear até aqui e até a definição de produto (especialmente §3, §5 e §6).
@@ -184,7 +184,8 @@ flowchart LR
 | **Bank** (`Banco`) | PostgreSQL | `id`, `userId`, `name` (único por usuário); seed MVP: Nubank, Itaú, Inter, Sofisa, Daycoval |
 | **Account** (`Conta`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
-| **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas** |
+| **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `systemKey?` (categorias de sistema), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas**. Folhas NON_EXPENSE de sistema (`INVOICE_PAYMENT`, `ACCOUNT_TRANSFER`, `INVESTMENT`) são provisionadas para todo usuário e não podem ser desativadas. |
+| **TransferLink** | PostgreSQL | Vínculo 1:1 entre débito e crédito de transferência entre contas (`debitTransactionId`, `creditTransactionId`); ambas ficam `type: TRANSFER` com categoria `ACCOUNT_TRANSFER` |
 | **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?` (null em compras de cartão até V6), `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`+`invoiceId`, `importBatchId`, `dedupKey`, `active` (soft-disable; listagem padrão só ativos). |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** (`balance = sum(amount)`) |
 | **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
@@ -357,7 +358,7 @@ sequenceDiagram
 - Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-corrente.csv`
 - `dedupKey`: SHA-256 de `originId|competenceDate|amount|descrição normalizada` (occurrence 1); occurrence ≥2 inclui `|#n` — permite gastos idênticos legítimos no mesmo dia
 - Preview marca `duplicateWarning`: `existing` (chave já no banco) ou `within_file` (mesmo fingerprint 2+ vezes no arquivo)
-- Transferência em dois extratos: dois lançamentos independentes até vínculo manual futuro
+- Transferência em dois extratos: importados como EXPENSE/INCOME; vínculo manual via categoria `ACCOUNT_TRANSFER` + `TransferLink`
 
 ### 6.2 Vínculo manual pagamento ↔ fatura
 
@@ -431,8 +432,9 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Lançamentos
 
-- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId`, `accountId`, `includeInactive`
-- `PATCH /api/transactions/:id` — `categoryId` (folha ativa compatível com o tipo) e/ou `active`
+- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId`, `accountId`, `includeInactive`; item inclui `transferCounterpartId` e `category.systemKey`
+- `GET /api/transactions/transfer-candidates` — candidatos a vínculo (`transactionId`, `amount?`)
+- `PATCH /api/transactions/:id` — `categoryId` (folha; NON_EXPENSE aplica comportamento de sistema), `counterpartTransactionId` (obrigatório para `ACCOUNT_TRANSFER`), e/ou `active`
 
 ### Faturas
 
@@ -524,7 +526,7 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | Tópico | Notas |
 |--------|-------|
 | Biblioteca de gráficos | Recharts vs Chart.js para evolução mensal (V7) |
-| Vínculo manual de transferências entre contas | Fora do V3; ver backlog MVP+ |
+| Vínculo manual de transferências entre contas | Entregue: `TransferLink` + modal em `/lancamentos`; importação nunca atribui NON_EXPENSE |
 
 ---
 
@@ -550,3 +552,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-03 | Import: preview com avisos de duplicata, seleção por linha (`selectedLines`), dedupKey com occurrence |
 | 2026-09-03 | Import: `DELETE /api/imports/:id` hard delete com guards (TRANSFER, fatura paid) |
 | 2026-09-03 | Faturas: `PATCH /api/invoices/:id` para editar `dueDate` |
+| 2026-09-04 | NON_EXPENSE de sistema (`systemKey`) + `TransferLink`; importação não atribui NON_EXPENSE; pagamento de fatura seta categoria automaticamente |

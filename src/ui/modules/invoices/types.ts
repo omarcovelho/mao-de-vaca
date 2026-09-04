@@ -33,6 +33,7 @@ export type InvoiceTransaction = {
     color: string;
     icon: string;
     kind: 'EXPENSE' | 'INCOME' | 'NON_EXPENSE';
+    systemKey?: string | null;
   };
 };
 

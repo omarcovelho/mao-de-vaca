@@ -4,6 +4,7 @@ export type CategoryLeafOption = {
   value: string;
   label: string;
   kind: CategoryKind;
+  systemKey: string | null;
 };
 
 export type CategoryNodeOption = {
@@ -30,6 +31,7 @@ export function flattenCategoryLeaves(
         value: node.id,
         label: nextPath.join(' › '),
         kind: node.kind,
+        systemKey: node.systemKey ?? null,
       });
     }
   }

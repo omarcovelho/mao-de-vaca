@@ -16,6 +16,10 @@ import {
   CreateCategoryDto,
   UpdateCategoryDto,
 } from './categories.types';
+import {
+  SYSTEM_CATEGORY_KEYS,
+  SYSTEM_NON_EXPENSE_TREE,
+} from './system-categories';
 
 type CategoryRow = Category & { _count?: { children: number } };
 
@@ -23,10 +27,94 @@ type CategoryRow = Category & { _count?: { children: number } };
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async ensureSystemCategories(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+
+    const rootDef = SYSTEM_NON_EXPENSE_TREE.root;
+    let root = await this.prisma.category.findFirst({
+      where: { userId, systemKey: rootDef.systemKey },
+    });
+    if (!root) {
+      root = await this.prisma.category.create({
+        data: {
+          userId,
+          parentId: null,
+          name: rootDef.name,
+          kind: rootDef.kind,
+          color: rootDef.color,
+          icon: rootDef.icon,
+          systemKey: rootDef.systemKey,
+        },
+      });
+    } else {
+      root = await this.prisma.category.update({
+        where: { id: root.id },
+        data: {
+          name: rootDef.name,
+          kind: rootDef.kind,
+          color: rootDef.color,
+          icon: rootDef.icon,
+          active: true,
+        },
+      });
+    }
+
+    for (const leaf of SYSTEM_NON_EXPENSE_TREE.leaves) {
+      const existing = await this.prisma.category.findFirst({
+        where: { userId, systemKey: leaf.systemKey },
+      });
+      if (!existing) {
+        await this.prisma.category.create({
+          data: {
+            userId,
+            parentId: root.id,
+            name: leaf.name,
+            kind: rootDef.kind,
+            color: rootDef.color,
+            icon: rootDef.icon,
+            systemKey: leaf.systemKey,
+          },
+        });
+      } else {
+        await this.prisma.category.update({
+          where: { id: existing.id },
+          data: {
+            parentId: root.id,
+            name: leaf.name,
+            kind: rootDef.kind,
+            color: rootDef.color,
+            icon: rootDef.icon,
+            active: true,
+          },
+        });
+      }
+    }
+  }
+
+  async findSystemLeafId(
+    userId: string,
+    systemKey: string,
+  ): Promise<string | null> {
+    await this.ensureSystemCategories(userId);
+    const leaf = await this.prisma.category.findFirst({
+      where: { userId, systemKey, active: true },
+      select: { id: true },
+    });
+    return leaf?.id ?? null;
+  }
+
   async list(
     userId: string,
     includeInactive = false,
   ): Promise<CategoryResponse[]> {
+    await this.ensureSystemCategories(userId);
+
     const rows = await this.prisma.category.findMany({
       where: {
         userId,
@@ -63,6 +151,8 @@ export class CategoriesService {
     userId: string,
     dto: CreateCategoryDto,
   ): Promise<CategoryResponse> {
+    await this.ensureSystemCategories(userId);
+
     const name = dto.name?.trim();
     if (!name) {
       throw new BadRequestException('Nome é obrigatório');
@@ -81,6 +171,14 @@ export class CategoriesService {
       if (!parent) {
         throw new NotFoundException('Categoria pai não encontrada');
       }
+      if (
+        parent.systemKey === SYSTEM_CATEGORY_KEYS.NON_EXPENSE_ROOT ||
+        parent.kind === CategoryKind.NON_EXPENSE
+      ) {
+        throw new BadRequestException(
+          'Não é possível criar categorias sob Não-despesa',
+        );
+      }
       depth = (await this.computeDepth(parent.id)) + 1;
       if (depth > MAX_CATEGORY_DEPTH) {
         throw new BadRequestException(
@@ -93,6 +191,11 @@ export class CategoriesService {
     } else {
       if (!dto.kind) {
         throw new BadRequestException('Tipo é obrigatório para categoria raiz');
+      }
+      if (dto.kind === CategoryKind.NON_EXPENSE) {
+        throw new BadRequestException(
+          'Categoria Não-despesa é gerenciada pelo sistema',
+        );
       }
       kind = dto.kind;
       color = dto.color?.trim() ?? '';
@@ -128,12 +231,27 @@ export class CategoriesService {
     id: string,
     dto: UpdateCategoryDto,
   ): Promise<CategoryResponse> {
+    await this.ensureSystemCategories(userId);
+
     const existing = await this.prisma.category.findFirst({
       where: { id, userId },
       include: { _count: { select: { children: true } } },
     });
     if (!existing) {
       throw new NotFoundException('Categoria não encontrada');
+    }
+
+    if (existing.systemKey) {
+      if (dto.active === false) {
+        throw new BadRequestException(
+          'Categoria de sistema não pode ser desativada',
+        );
+      }
+      if (dto.name !== undefined && dto.name.trim() !== existing.name) {
+        throw new BadRequestException(
+          'Nome de categoria de sistema não pode ser alterado',
+        );
+      }
     }
 
     const data: Prisma.CategoryUpdateInput = {};
@@ -196,9 +314,15 @@ export class CategoriesService {
     return this.toResponse(updated, depth, updated._count.children === 0);
   }
 
+  /** Active EXPENSE/INCOME leaves only — system NON_EXPENSE do not count for onboarding. */
   async countActiveLeaves(userId: string): Promise<number> {
+    await this.ensureSystemCategories(userId);
     const rows = await this.prisma.category.findMany({
-      where: { userId, active: true },
+      where: {
+        userId,
+        active: true,
+        kind: { in: [CategoryKind.EXPENSE, CategoryKind.INCOME] },
+      },
       select: { id: true, parentId: true },
     });
     const parentIds = new Set(
@@ -219,6 +343,7 @@ export class CategoriesService {
       kind: row.kind,
       color: row.color,
       icon: row.icon,
+      systemKey: row.systemKey,
       active: row.active,
       depth,
       isLeaf,
@@ -309,7 +434,7 @@ export class CategoriesService {
   ): Promise<void> {
     const all = await this.prisma.category.findMany({
       where: { userId },
-      select: { id: true, parentId: true },
+      select: { id: true, parentId: true, systemKey: true },
     });
     const childrenByParent = new Map<string, string[]>();
     for (const row of all) {
@@ -320,12 +445,19 @@ export class CategoriesService {
     }
     const toDeactivate: string[] = [];
     const walk = (id: string) => {
+      const row = all.find((r) => r.id === id);
+      if (row?.systemKey) {
+        return;
+      }
       toDeactivate.push(id);
       for (const childId of childrenByParent.get(id) ?? []) {
         walk(childId);
       }
     };
     walk(rootId);
+    if (toDeactivate.length === 0) {
+      return;
+    }
     await this.prisma.category.updateMany({
       where: { id: { in: toDeactivate }, userId },
       data: { active: false },

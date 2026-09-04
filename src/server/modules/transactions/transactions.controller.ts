@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TransactionsService } from './transactions.service';
 import {
   ListTransactionsQuery,
+  TransferCandidatesQuery,
   UpdateTransactionDto,
 } from './transactions.types';
 
@@ -17,6 +18,14 @@ export class TransactionsController {
     @Query() query: ListTransactionsQuery,
   ) {
     return this.transactionsService.list(user.userId, query);
+  }
+
+  @Get('transfer-candidates')
+  transferCandidates(
+    @CurrentUser() user: AuthUser,
+    @Query() query: TransferCandidatesQuery,
+  ) {
+    return this.transactionsService.listTransferCandidates(user.userId, query);
   }
 
   @Patch(':id')

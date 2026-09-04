@@ -41,6 +41,7 @@ describe('Reports HTTP', () => {
   let batchId: string;
 
   async function cleanup() {
+    await prisma.transferLink.deleteMany({ where: { userId } });
     await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
@@ -254,6 +255,33 @@ describe('Reports HTTP', () => {
       incomeTotal: 2000,
       balance: 1860,
     });
+  });
+
+  it('GET /api/reports/summary excludes NON_EXPENSE category even if type is EXPENSE', async () => {
+    await seedTransaction({
+      description: 'Mercado',
+      amount: '-100.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      competenceDate: '2026-03-10',
+      dedupKey: 'nonexp-food',
+    });
+    await seedTransaction({
+      description: 'Aplicação mal tipada',
+      amount: '-2000.00',
+      type: 'EXPENSE',
+      categoryId: transferCategoryId,
+      competenceDate: '2026-03-11',
+      dedupKey: 'nonexp-invest',
+    });
+
+    const response = await request(app.getHttpServer())
+      .get('/api/reports/summary')
+      .query({ regime: 'competence', from: '2026-03-01', to: '2026-03-31' })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(response.body.expenseTotal).toBe(100);
   });
 
   it('GET /api/reports/summary filters by cashDate when regime=cash', async () => {

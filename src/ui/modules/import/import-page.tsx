@@ -96,6 +96,38 @@ function formatMonth(isoDate: string): string {
   return `${month}/${year}`;
 }
 
+function formatDayMonth(isoDate: string): string {
+  const parts = isoDate.split('-');
+  if (parts.length < 3) {
+    return isoDate;
+  }
+  return `${parts[2]}/${parts[1]}`;
+}
+
+function formatDay(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  if (!year || !month || !day) {
+    return isoDate;
+  }
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date(year, month - 1, day));
+}
+
+function formatHistoryDate(isoDate: string): string {
+  const datePart = isoDate.slice(0, 10);
+  const [year, month, day] = datePart.split('-').map(Number);
+  if (!year || !month || !day) {
+    return isoDate;
+  }
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(year, month - 1, day));
+}
+
 function defaultSelectedLines(rows: PreviewRow[]): Set<number> {
   const selected = new Set<number>();
   for (const row of rows) {
@@ -173,7 +205,11 @@ export function ImportPage() {
   const [existingModalCategoryId, setExistingModalCategoryId] = useState('');
 
   function applyCategoryTree(tree: Category[]) {
-    setLeaves(flattenCategoryLeaves(tree));
+        setLeaves(
+          flattenCategoryLeaves(tree).filter(
+            (leaf) => leaf.kind === 'EXPENSE' || leaf.kind === 'INCOME',
+          ),
+        );
     setParentOptions(flattenCategoryParents(tree));
   }
 
@@ -287,7 +323,7 @@ export function ImportPage() {
     () =>
       cardInvoices.map((invoice) => ({
         value: invoice.id,
-        label: `${formatMonth(invoice.referenceMonth)} · vence ${invoice.dueDate}`,
+        label: `${formatMonth(invoice.referenceMonth)} · vence ${formatDayMonth(invoice.dueDate)}`,
       })),
     [cardInvoices],
   );
@@ -532,131 +568,182 @@ export function ImportPage() {
       ) : null}
 
       <form
-        className="form-panel import-form"
+        className="import-setup"
         onSubmit={(e) => void handlePreview(e)}
       >
-        <div className="form-stack">
-          <span className="form-label">Tipo</span>
-          <div className="pill-group" role="group" aria-label="Tipo de importação">
+        <div className="import-setup__modes">
+          <span className="import-field__label">Tipo de arquivo</span>
+          <div
+            className="import-mode-toggle"
+            role="group"
+            aria-label="Tipo de importação"
+          >
             <button
               type="button"
-              className={`pill${importMode === 'transactions' ? ' pill--active' : ''}`}
+              className={`import-mode-toggle__option${
+                importMode === 'transactions'
+                  ? ' import-mode-toggle__option--active'
+                  : ''
+              }`}
+              aria-label="Extrato de conta"
+              aria-pressed={importMode === 'transactions'}
               onClick={() => switchMode('transactions')}
               disabled={!hasAccounts}
             >
-              Extrato de conta
+              <span className="import-mode-toggle__title">Extrato de conta</span>
+              <span className="import-mode-toggle__hint">
+                Conta corrente ou poupança
+              </span>
             </button>
             <button
               type="button"
-              className={`pill${importMode === 'invoice' ? ' pill--active' : ''}`}
+              className={`import-mode-toggle__option${
+                importMode === 'invoice'
+                  ? ' import-mode-toggle__option--active'
+                  : ''
+              }`}
+              aria-label="Fatura de cartão"
+              aria-pressed={importMode === 'invoice'}
               onClick={() => switchMode('invoice')}
               disabled={!hasCards}
             >
-              Fatura de cartão
+              <span className="import-mode-toggle__title">Fatura de cartão</span>
+              <span className="import-mode-toggle__hint">
+                Compras e estornos da fatura
+              </span>
             </button>
           </div>
           {importMode === 'invoice' ? (
-            <p className="form-hint">
+            <p className="import-setup__callout">
               Remova as linhas de pagamento do CSV antes de importar. Importe
               apenas gastos e estornos.
             </p>
           ) : null}
         </div>
 
-        {importMode === 'transactions' ? (
-          <div className="form-stack">
-            <label id="import-account-label" htmlFor="import-account">
-              Origem
-            </label>
-            {hasAccounts ? (
-              <SearchableSelect
-                id="import-account"
-                aria-label="Origem"
-                options={accountOptions}
-                value={accountId}
-                onChange={setAccountId}
-              />
-            ) : (
-              <p className="form-hint">
-                Nenhuma conta ativa.{' '}
-                <Link to="/contas">Cadastrar conta</Link>
-              </p>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="form-stack">
-              <label htmlFor="import-card">Cartão</label>
-              <SearchableSelect
-                id="import-card"
-                aria-label="Cartão"
-                options={cardOptions}
-                value={cardId}
-                onChange={setCardId}
-              />
-            </div>
-            <div className="form-stack">
-              <label htmlFor="import-invoice">Fatura</label>
-              {cardInvoices.length === 0 ? (
-                <p className="form-hint">
-                  Nenhuma fatura neste cartão.{' '}
-                  <Link to="/cartoes">Criar fatura</Link>
-                </p>
-              ) : (
-                <SearchableSelect
-                  id="import-invoice"
-                  aria-label="Fatura"
-                  options={invoiceOptions}
-                  value={invoiceId}
-                  onChange={setInvoiceId}
-                />
-              )}
-            </div>
-          </>
-        )}
-
-        <div className="form-stack">
-          <label htmlFor="import-parser">Parser</label>
-          <SearchableSelect
-            id="import-parser"
-            aria-label="Parser"
-            options={parserOptions}
-            value={parserId}
-            onChange={setParserId}
-          />
-        </div>
-
-        <div className="form-stack">
-          <span className="form-label">Arquivo</span>
-          <button
-            type="button"
-            className="import-dropzone"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              handleFile(event.dataTransfer.files[0] ?? null);
-            }}
+        <div className="import-setup__body">
+          <div
+            className={`import-setup__fields${
+              importMode === 'invoice' ? ' import-setup__fields--invoice' : ''
+            }`}
           >
-            <strong>{file ? file.name : 'Arraste o CSV aqui'}</strong>
-            <span>ou clique para escolher o arquivo</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
-          />
+            {importMode === 'transactions' ? (
+              <div className="import-field">
+                <span className="import-field__label">Origem</span>
+                {hasAccounts ? (
+                  <SearchableSelect
+                    id="import-account"
+                    aria-label="Origem"
+                    options={accountOptions}
+                    value={accountId}
+                    onChange={setAccountId}
+                  />
+                ) : (
+                  <p className="form-hint">
+                    Nenhuma conta ativa.{' '}
+                    <Link to="/contas">Cadastrar conta</Link>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="import-field">
+                  <span className="import-field__label">Cartão</span>
+                  <SearchableSelect
+                    id="import-card"
+                    aria-label="Cartão"
+                    options={cardOptions}
+                    value={cardId}
+                    onChange={setCardId}
+                  />
+                </div>
+                <div className="import-field">
+                  <span className="import-field__label">Fatura</span>
+                  {cardInvoices.length === 0 ? (
+                    <p className="form-hint">
+                      Nenhuma fatura neste cartão.{' '}
+                      <Link to="/cartoes">Criar fatura</Link>
+                    </p>
+                  ) : (
+                    <SearchableSelect
+                      id="import-invoice"
+                      aria-label="Fatura"
+                      options={invoiceOptions}
+                      value={invoiceId}
+                      onChange={setInvoiceId}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className="import-field">
+              <span className="import-field__label">Parser</span>
+              <SearchableSelect
+                id="import-parser"
+                aria-label="Parser"
+                options={parserOptions}
+                value={parserId}
+                onChange={setParserId}
+              />
+            </div>
+          </div>
+
+          <div className="import-setup__file">
+            <span className="import-field__label">Arquivo</span>
+            <button
+              type="button"
+              className={`import-dropzone${file ? ' import-dropzone--filled' : ''}`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                handleFile(event.dataTransfer.files[0] ?? null);
+              }}
+            >
+              <span className="import-dropzone__icon" aria-hidden>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="1.75rem"
+                  height="1.75rem"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 3v5h5" />
+                  <path d="M8 13h8M8 17h5" />
+                </svg>
+              </span>
+              <span className="import-dropzone__copy">
+                <strong>{file ? file.name : 'Arraste o CSV aqui'}</strong>
+                <span>
+                  {file
+                    ? 'Clique para trocar o arquivo'
+                    : 'ou clique para escolher o arquivo'}
+                </span>
+              </span>
+            </button>
+            <input
+              ref={fileInputRef}
+              className="visually-hidden"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
+            />
+          </div>
         </div>
 
         {error ? (
-          <p className="form-stack" role="alert">
+          <p className="import-setup__error" role="alert">
             {error}
           </p>
         ) : null}
 
-        <div className="form-actions">
+        <div className="import-setup__actions">
+          <p className="form-hint">CSV com data, descrição, valor e categoria</p>
           <button
             type="submit"
             className="btn btn--primary"
@@ -668,101 +755,120 @@ export function ImportPage() {
       </form>
 
       {preview ? (
-        <section className="section" aria-labelledby="preview-heading">
+        <section className="import-panel" aria-labelledby="preview-heading">
           <div className="section__header">
             <h2 id="preview-heading" className="section__title">
               Pré-visualização
             </h2>
-          </div>
-          <p className="form-hint">
-            {preview.summary.validCount} linhas válidas,{' '}
-            {preview.summary.errorCount} erros,{' '}
-            {preview.summary.unknownCategoryCount} categorias desconhecidas
-            {warningCount > 0 ? `, ${warningCount} avisos de duplicação` : ''}.{' '}
-            {selectedCount} selecionadas para importar.
-          </p>
-          <div
-            className="import-preview-actions"
-            role="group"
-            aria-label="Seleção de linhas"
-          >
-            <button
-              type="button"
-              className="btn btn--secondary btn--compact"
-              onClick={selectAllValid}
+            <div
+              className="section__actions"
+              role="group"
+              aria-label="Seleção de linhas"
             >
-              Selecionar todas
-            </button>
-            <button
-              type="button"
-              className="btn btn--secondary btn--compact"
-              onClick={deselectAll}
-            >
-              Desmarcar todas
-            </button>
-            <button
-              type="button"
-              className="btn btn--secondary btn--compact"
-              onClick={deselectDuplicateWarnings}
-              disabled={warningCount === 0}
-            >
-              Desmarcar avisos de duplicação
-            </button>
-          </div>
-          <ul className="import-preview-list">
-            {preview.rows.map((row) => (
-              <li
-                key={row.line}
-                className={`import-preview-row${
-                  row.duplicateWarning ? ' import-preview-row--warning' : ''
-                }`}
+              <button
+                type="button"
+                className="btn btn--secondary btn--compact"
+                onClick={selectAllValid}
               >
-                {row.error ? (
-                  <span>
-                    Linha {row.line}: {row.error}
-                  </span>
-                ) : (
-                  <>
-                    <label className="import-preview-row__select">
+                Selecionar todas
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary btn--compact"
+                onClick={deselectAll}
+              >
+                Desmarcar todas
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary btn--compact"
+                onClick={deselectDuplicateWarnings}
+                disabled={warningCount === 0}
+              >
+                Desmarcar avisos de duplicação
+              </button>
+            </div>
+          </div>
+          <ul className="import-preview__stats">
+            <li>{preview.summary.validCount} válidas</li>
+            <li>{preview.summary.errorCount} erros</li>
+            <li>{preview.summary.unknownCategoryCount} categorias</li>
+            {warningCount > 0 ? <li>{warningCount} avisos</li> : null}
+            <li>{selectedCount} selecionadas</li>
+          </ul>
+          <div className="import-preview-table">
+            <div className="import-preview-head" aria-hidden>
+              <span />
+              <span>Data</span>
+              <span>Descrição</span>
+              <span>Categoria</span>
+              <span>Tipo</span>
+              <span>Valor</span>
+            </div>
+            <ul className="import-preview-list">
+              {preview.rows.map((row) => (
+                <li
+                  key={row.line}
+                  className={`import-preview-row${
+                    row.error ? ' import-preview-row--error' : ''
+                  }${
+                    row.duplicateWarning ? ' import-preview-row--warning' : ''
+                  }`}
+                >
+                  {row.error ? (
+                    <span className="import-preview-row__error">
+                      Linha {row.line}: {row.error}
+                    </span>
+                  ) : (
+                    <>
                       <input
+                        className="import-preview-row__check"
                         type="checkbox"
                         checked={selectedLines.has(row.line)}
                         onChange={() => toggleLine(row.line)}
                         aria-label={`Importar linha ${row.line}: ${row.description ?? ''}`}
                       />
-                      <span className="import-preview-row__text">
+                      <span className="import-preview-row__date">
+                        {row.competenceDate
+                          ? formatDay(row.competenceDate)
+                          : '—'}
+                      </span>
+                      <span
+                        className="import-preview-row__description"
+                        title={row.description ?? ''}
+                      >
                         {row.description}
-                        <span className="import-preview-row__meta">
-                          {' '}
-                          · {row.category} · {row.competenceDate} ·{' '}
-                          {row.type ? TYPE_LABELS[row.type] : ''}
-                        </span>
                         {row.duplicateWarning ? (
                           <span className="import-preview-row__warning">
-                            {' '}
-                            · {WARNING_LABELS[row.duplicateWarning]}
+                            {WARNING_LABELS[row.duplicateWarning]}
                           </span>
                         ) : null}
                       </span>
-                    </label>
-                    <span
-                      className={
-                        row.amount?.startsWith('-')
-                          ? 'import-preview-row__amount import-preview-row__amount--expense'
-                          : 'import-preview-row__amount'
-                      }
-                    >
-                      {row.amount}
-                    </span>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+                      <span className="import-preview-row__category">
+                        {row.category || '—'}
+                      </span>
+                      <span className="import-preview-row__type">
+                        {row.type ? TYPE_LABELS[row.type] : '—'}
+                      </span>
+                      <span
+                        className={
+                          row.amount?.startsWith('-')
+                            ? 'import-preview-row__amount import-preview-row__amount--expense'
+                            : 'import-preview-row__amount'
+                        }
+                      >
+                        {row.amount}
+                      </span>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {preview.unknownCategories.length > 0 ? (
-            <div className="form-stack">
-              <h3 className="section__title">Categorias desconhecidas</h3>
+            <div className="import-mappings">
+              <h3 className="import-mappings__title">Categorias desconhecidas</h3>
               {preview.unknownCategories.map((name) => {
                 const draft = drafts[name];
                 const displayName = name || '(sem categoria)';
@@ -839,13 +945,13 @@ export function ImportPage() {
                       <ul className="import-mapping__rows">
                         {relatedRows.map((row) => (
                           <li key={row.line} className="import-mapping__row">
+                            <span className="import-mapping__row-date">
+                              {row.competenceDate
+                                ? formatDay(row.competenceDate)
+                                : '—'}
+                            </span>
                             <span className="import-mapping__row-desc">
                               {row.description}
-                              <span className="import-mapping__row-meta">
-                                {' '}
-                                · {row.competenceDate}
-                                {row.type ? ` · ${TYPE_LABELS[row.type]}` : ''}
-                              </span>
                             </span>
                             <span
                               className={
@@ -913,7 +1019,7 @@ export function ImportPage() {
             </div>
           ) : null}
 
-          <div className="form-actions">
+          <div className="import-panel__footer">
             <button
               type="button"
               className="btn btn--primary"
@@ -931,7 +1037,7 @@ export function ImportPage() {
         </section>
       ) : null}
 
-      <section className="section" aria-labelledby="history-heading">
+      <section className="import-panel" aria-labelledby="history-heading">
         <div className="section__header">
           <h2 id="history-heading" className="section__title">
             Histórico
@@ -941,15 +1047,24 @@ export function ImportPage() {
           <p className="page__empty">Nenhuma importação ainda.</p>
         ) : (
           <ul className="import-history">
+            <li className="import-history__head" aria-hidden>
+              <span>Arquivo</span>
+              <span>Origem</span>
+              <span>Resultado</span>
+              <span />
+            </li>
             {history.map((item) => (
               <li key={item.id} className="import-history__item">
-                <div className="import-history__meta">
+                <div className="import-history__file">
                   <strong>{item.fileName}</strong>
-                  <span>
-                    {formatHistoryOrigin(item)} · {item.createdCount}{' '}
-                    criados, {item.skippedCount} ignorados
-                  </span>
+                  <span>{formatHistoryDate(item.createdAt)}</span>
                 </div>
+                <span className="import-history__origin">
+                  {formatHistoryOrigin(item)}
+                </span>
+                <span className="import-history__counts">
+                  {item.createdCount} criados, {item.skippedCount} ignorados
+                </span>
                 <button
                   type="button"
                   className="btn btn--ghost btn--icon import-history__delete"

@@ -52,6 +52,8 @@ describe('Invoice payment link UI', () => {
             color: '#2d6a4f',
             icon: 'utensils',
             kind: 'EXPENSE',
+
+          systemKey: null,
           },
         },
       ],
@@ -123,6 +125,8 @@ describe('Invoice payment link UI', () => {
                 color: '#555',
                 icon: 'arrow',
                 kind: 'NON_EXPENSE',
+
+              systemKey: null,
               },
               account: {
                 id: 'acc-1',
@@ -131,6 +135,7 @@ describe('Invoice payment link UI', () => {
               },
               card: null,
               invoiceId: null,
+            transferCounterpartId: null,
             },
           ],
         });

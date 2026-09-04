@@ -41,6 +41,7 @@ describe('Transactions HTTP', () => {
   let batchId: string;
 
   async function cleanup() {
+    await prisma.transferLink.deleteMany({ where: { userId } });
     await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
@@ -630,7 +631,7 @@ describe('Transactions HTTP', () => {
       .expect(400);
   });
 
-  it('rejects income category for expense transaction', async () => {
+  it('reclassifies expense to income when assigning income category', async () => {
     const tx = await seedTransaction({
       description: 'Mercado',
       amount: '40.00',
@@ -641,10 +642,308 @@ describe('Transactions HTTP', () => {
       dedupKey: 'patch-kind',
     });
 
-    await request(app.getHttpServer())
+    const res = await request(app.getHttpServer())
       .patch(`/api/transactions/${tx.id}`)
       .set('Cookie', authCookie)
       .send({ categoryId: salaryId })
+      .expect(200);
+
+    expect(res.body.type).toBe('INCOME');
+    expect(res.body.category.id).toBe(salaryId);
+  });
+
+  it('PATCH ACCOUNT_TRANSFER links counterpart and sets both as TRANSFER', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    const transferCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'ACCOUNT_TRANSFER' },
+    });
+
+    const debit = await seedTransaction({
+      description: 'PIX para B',
+      amount: '-1200.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-05',
+      dedupKey: 'pix-out',
+    });
+    const credit = await seedTransaction({
+      description: 'PIX de A',
+      amount: '1200.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountBId,
+      competenceDate: '2026-09-05',
+      dedupKey: 'pix-in',
+    });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/transactions/${debit.id}`)
+      .set('Cookie', authCookie)
+      .send({
+        categoryId: transferCat.id,
+        counterpartTransactionId: credit.id,
+      })
+      .expect(200);
+
+    expect(res.body.type).toBe('TRANSFER');
+    expect(res.body.category.systemKey).toBe('ACCOUNT_TRANSFER');
+    expect(res.body.transferCounterpartId).toBe(credit.id);
+
+    const creditRow = await prisma.transaction.findUniqueOrThrow({
+      where: { id: credit.id },
+    });
+    expect(creditRow.type).toBe('TRANSFER');
+    expect(creditRow.categoryId).toBe(transferCat.id);
+  });
+
+  it('PATCH category on linked transfer updates counterpart and removes TransferLink', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    const transferCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'ACCOUNT_TRANSFER' },
+    });
+    const investmentCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'INVESTMENT' },
+    });
+
+    const debit = await seedTransaction({
+      description: 'PIX para B',
+      amount: '-800.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-06',
+      dedupKey: 'unlink-out',
+    });
+    const credit = await seedTransaction({
+      description: 'PIX de A',
+      amount: '800.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountBId,
+      competenceDate: '2026-09-06',
+      dedupKey: 'unlink-in',
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/transactions/${debit.id}`)
+      .set('Cookie', authCookie)
+      .send({
+        categoryId: transferCat.id,
+        counterpartTransactionId: credit.id,
+      })
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/transactions/${debit.id}`)
+      .set('Cookie', authCookie)
+      .send({ categoryId: investmentCat.id })
+      .expect(200);
+
+    expect(res.body.type).toBe('TRANSFER');
+    expect(res.body.category.systemKey).toBe('INVESTMENT');
+    expect(res.body.transferCounterpartId).toBeNull();
+
+    const creditRow = await prisma.transaction.findUniqueOrThrow({
+      where: { id: credit.id },
+    });
+    expect(creditRow.type).toBe('TRANSFER');
+    expect(creditRow.categoryId).toBe(investmentCat.id);
+
+    expect(
+      await prisma.transferLink.count({
+        where: {
+          OR: [
+            { debitTransactionId: debit.id },
+            { creditTransactionId: credit.id },
+          ],
+        },
+      }),
+    ).toBe(0);
+  });
+
+  it('PATCH expense category on linked transfer updates both legs and removes link', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    const transferCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'ACCOUNT_TRANSFER' },
+    });
+
+    const debit = await seedTransaction({
+      description: 'PIX out',
+      amount: '-300.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-07',
+      dedupKey: 'reclass-out',
+    });
+    const credit = await seedTransaction({
+      description: 'PIX in',
+      amount: '300.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountBId,
+      competenceDate: '2026-09-07',
+      dedupKey: 'reclass-in',
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/transactions/${debit.id}`)
+      .set('Cookie', authCookie)
+      .send({
+        categoryId: transferCat.id,
+        counterpartTransactionId: credit.id,
+      })
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/transactions/${credit.id}`)
+      .set('Cookie', authCookie)
+      .send({ categoryId: leisureId })
+      .expect(200);
+
+    // Crédito (+): type segue o sinal → INCOME; débito (−) → EXPENSE. Ambos com a nova categoria.
+    expect(res.body.type).toBe('INCOME');
+    expect(res.body.category.id).toBe(leisureId);
+    expect(res.body.transferCounterpartId).toBeNull();
+    expect(res.body.amount).toBe(300);
+
+    const debitRow = await prisma.transaction.findUniqueOrThrow({
+      where: { id: debit.id },
+    });
+    expect(debitRow.type).toBe('EXPENSE');
+    expect(debitRow.categoryId).toBe(leisureId);
+    expect(Number(debitRow.amount)).toBe(-300);
+    expect(await prisma.transferLink.count({ where: { userId } })).toBe(0);
+  });
+
+  it('PATCH ACCOUNT_TRANSFER without counterpart returns 400', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+    const transferCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'ACCOUNT_TRANSFER' },
+    });
+    const debit = await seedTransaction({
+      description: 'PIX',
+      amount: '-100.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-05',
+      dedupKey: 'pix-need-link',
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/transactions/${debit.id}`)
+      .set('Cookie', authCookie)
+      .send({ categoryId: transferCat.id })
+      .expect(400);
+  });
+
+  it('PATCH INVESTMENT reclassifies without counterpart', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+    const investmentCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'INVESTMENT' },
+    });
+    const tx = await seedTransaction({
+      description: 'Aplicação CDB',
+      amount: '-2000.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-08',
+      dedupKey: 'invest-1',
+    });
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/transactions/${tx.id}`)
+      .set('Cookie', authCookie)
+      .send({ categoryId: investmentCat.id })
+      .expect(200);
+
+    expect(res.body.type).toBe('TRANSFER');
+    expect(res.body.category.systemKey).toBe('INVESTMENT');
+    expect(res.body.transferCounterpartId).toBeNull();
+  });
+
+  it('GET transfer-candidates finds opposite amount on other account', async () => {
+    const debit = await seedTransaction({
+      description: 'PIX out',
+      amount: '-500.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-05',
+      dedupKey: 'cand-out',
+    });
+    await seedTransaction({
+      description: 'PIX in',
+      amount: '500.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountBId,
+      competenceDate: '2026-09-05',
+      dedupKey: 'cand-in',
+    });
+    await seedTransaction({
+      description: 'Other amount',
+      amount: '400.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountBId,
+      competenceDate: '2026-09-05',
+      dedupKey: 'cand-other',
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/transactions/transfer-candidates')
+      .query({ transactionId: debit.id, amount: '500' })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].description).toBe('PIX in');
+  });
+
+  it('rejects classifying as INVOICE_PAYMENT via PATCH', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+    const paymentCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'INVOICE_PAYMENT' },
+    });
+    const tx = await seedTransaction({
+      description: 'Pagamento',
+      amount: '-100.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-09-10',
+      dedupKey: 'pay-reject',
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/transactions/${tx.id}`)
+      .set('Cookie', authCookie)
+      .send({ categoryId: paymentCat.id })
       .expect(400);
   });
 });

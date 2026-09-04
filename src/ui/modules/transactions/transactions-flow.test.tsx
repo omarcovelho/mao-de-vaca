@@ -51,6 +51,7 @@ const foodLeaf = {
   kind: 'EXPENSE',
   color: '#2d6a4f',
   icon: 'utensils',
+  systemKey: null,
   active: true,
   depth: 1,
   isLeaf: true,
@@ -64,6 +65,7 @@ const leisureLeaf = {
   kind: 'EXPENSE',
   color: '#40916c',
   icon: 'sparkles',
+  systemKey: null,
   active: true,
   depth: 1,
   isLeaf: true,
@@ -132,10 +134,12 @@ describe('Transactions UI flow', () => {
                 color: '#2d6a4f',
                 icon: 'utensils',
                 kind: 'EXPENSE',
+                systemKey: null,
               },
               account: { id: 'acc-1', label: 'Nubank CC', bank: { id: 'b1', name: 'Nubank' } },
               card: null,
               invoiceId: null,
+            transferCounterpartId: null,
             },
           ],
         });
@@ -182,10 +186,12 @@ describe('Transactions UI flow', () => {
           color: '#2d6a4f',
           icon: 'utensils',
           kind: 'EXPENSE' as const,
+        systemKey: null,
         },
         account: { id: 'acc-1', label: 'Nubank CC', bank: { id: 'b1', name: 'Nubank' } },
         card: null,
         invoiceId: null,
+      transferCounterpartId: null,
       },
     ];
 
@@ -225,6 +231,7 @@ describe('Transactions UI flow', () => {
                 color: '#40916c',
                 icon: 'sparkles',
                 kind: 'EXPENSE',
+                systemKey: null,
               },
             },
           ];
@@ -365,6 +372,7 @@ describe('Transactions UI flow', () => {
                 color: '#2d6a4f',
                 icon: 'utensils',
                 kind: 'EXPENSE',
+                systemKey: null,
               },
               account: null,
               card: {
@@ -373,6 +381,7 @@ describe('Transactions UI flow', () => {
                 bank: { id: 'b1', name: 'Nubank' },
               },
               invoiceId: 'inv-1',
+            transferCounterpartId: null,
             },
           ],
         });
@@ -438,6 +447,7 @@ describe('Transactions UI flow', () => {
                 color: '#2d6a4f',
                 icon: 'utensils',
                 kind: 'EXPENSE',
+                systemKey: null,
               },
               account: {
                 id: 'acc-1',
@@ -446,6 +456,7 @@ describe('Transactions UI flow', () => {
               },
               card: null,
               invoiceId: 'inv-1',
+            transferCounterpartId: null,
             },
           ],
         });
@@ -461,5 +472,182 @@ describe('Transactions UI flow', () => {
       'href',
       '/cartoes?invoiceId=inv-1',
     );
+  });
+
+  it('abre modal de vínculo ao classificar como transferência entre contas', async () => {
+    const user = userEvent.setup();
+    const month = toMonthKey();
+    const transferLeaf = {
+      id: 'transfer',
+      parentId: 'non-exp',
+      name: 'Transferências entre contas',
+      kind: 'NON_EXPENSE' as const,
+      color: '#718096',
+      icon: 'arrows',
+      systemKey: 'ACCOUNT_TRANSFER',
+      active: true,
+      depth: 2,
+      isLeaf: true,
+      children: [],
+    };
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/accounts')) {
+        return Response.json([
+          {
+            id: 'acc-1',
+            label: 'Corrente',
+            active: true,
+            bank: { id: 'b1', name: 'Nubank' },
+          },
+          {
+            id: 'acc-2',
+            label: 'Poupança',
+            active: true,
+            bank: { id: 'b1', name: 'Nubank' },
+          },
+        ]);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([
+          foodLeaf,
+          {
+            id: 'non-exp',
+            parentId: null,
+            name: 'Não-despesa',
+            kind: 'NON_EXPENSE',
+            color: '#718096',
+            icon: 'arrows',
+            systemKey: 'NON_EXPENSE_ROOT',
+            active: true,
+            depth: 1,
+            isLeaf: false,
+            children: [transferLeaf],
+          },
+        ]);
+      }
+      if (url.includes('/api/transactions/transfer-candidates')) {
+        return Response.json({
+          items: [
+            {
+              id: 'tx-credit',
+              description: 'PIX de corrente',
+              amount: 1200,
+              type: 'INCOME',
+              competenceDate: `${month}-05`,
+              cashDate: `${month}-05`,
+              displayDate: `${month}-05`,
+              active: true,
+              category: {
+                id: 'food',
+                name: 'Alimentação',
+                color: '#2d6a4f',
+                icon: 'utensils',
+                kind: 'EXPENSE',
+                systemKey: null,
+              },
+              account: {
+                id: 'acc-2',
+                label: 'Poupança',
+                bank: { id: 'b1', name: 'Nubank' },
+              },
+              card: null,
+              invoiceId: null,
+              transferCounterpartId: null,
+            },
+          ],
+        });
+      }
+      if (
+        url.includes('/api/transactions/tx-debit') &&
+        init?.method === 'PATCH'
+      ) {
+        return Response.json({
+          id: 'tx-debit',
+          description: 'PIX para poupança',
+          amount: -1200,
+          type: 'TRANSFER',
+          competenceDate: `${month}-05`,
+          cashDate: `${month}-05`,
+          displayDate: `${month}-05`,
+          active: true,
+          category: {
+            id: 'transfer',
+            name: 'Transferências entre contas',
+            color: '#718096',
+            icon: 'arrows',
+            kind: 'NON_EXPENSE',
+            systemKey: 'ACCOUNT_TRANSFER',
+          },
+          account: {
+            id: 'acc-1',
+            label: 'Corrente',
+            bank: { id: 'b1', name: 'Nubank' },
+          },
+          card: null,
+          invoiceId: null,
+          transferCounterpartId: 'tx-credit',
+        });
+      }
+      if (url.includes('/api/transactions?')) {
+        return Response.json({
+          regime: 'competence',
+          from: `${month}-01`,
+          to: `${month}-28`,
+          items: [
+            {
+              id: 'tx-debit',
+              description: 'PIX para poupança',
+              amount: -1200,
+              type: 'EXPENSE',
+              competenceDate: `${month}-05`,
+              cashDate: `${month}-05`,
+              displayDate: `${month}-05`,
+              active: true,
+              category: {
+                id: 'food',
+                name: 'Alimentação',
+                color: '#2d6a4f',
+                icon: 'utensils',
+                kind: 'EXPENSE',
+                systemKey: null,
+              },
+              account: {
+                id: 'acc-1',
+                label: 'Corrente',
+                bank: { id: 'b1', name: 'Nubank' },
+              },
+              card: null,
+              invoiceId: null,
+              transferCounterpartId: null,
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderTransactionsApp();
+
+    await user.click(await screen.findByRole('button', { name: 'Alimentação' }));
+    await chooseSearchableOption(user, 'Categoria', /Transferências entre contas/);
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+
+    expect(
+      await screen.findByTestId('link-transfer-modal'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('PIX de corrente')).toBeInTheDocument();
+
+    await user.click(screen.getByText('PIX de corrente'));
+    await user.click(screen.getByRole('button', { name: 'Vincular' }));
+
+    expect(await screen.findByText(/Transferência vinculada/i)).toBeInTheDocument();
   });
 });

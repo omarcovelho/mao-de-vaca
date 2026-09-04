@@ -9,8 +9,14 @@ export type ListTransactionsQuery = {
   includeInactive?: string;
 };
 
+export type TransferCandidatesQuery = {
+  transactionId?: string;
+  amount?: string;
+};
+
 export type UpdateTransactionDto = {
   categoryId?: string;
+  counterpartTransactionId?: string;
   active?: boolean;
 };
 
@@ -29,6 +35,7 @@ export type TransactionItemResponse = {
     color: string;
     icon: string;
     kind: 'EXPENSE' | 'INCOME' | 'NON_EXPENSE';
+    systemKey: string | null;
   };
   account: {
     id: string;
@@ -41,11 +48,16 @@ export type TransactionItemResponse = {
     bank: { id: string; name: string };
   } | null;
   invoiceId: string | null;
+  transferCounterpartId: string | null;
 };
 
 export type ListTransactionsResponse = {
   regime: RegimeApi;
   from: string;
   to: string;
+  items: TransactionItemResponse[];
+};
+
+export type TransferCandidatesResponse = {
   items: TransactionItemResponse[];
 };

@@ -15,6 +15,7 @@ export type TransactionItem = {
     color: string;
     icon: string;
     kind: 'EXPENSE' | 'INCOME' | 'NON_EXPENSE';
+    systemKey: string | null;
   };
   account: {
     id: string;
@@ -27,6 +28,7 @@ export type TransactionItem = {
     bank: { id: string; name: string };
   } | null;
   invoiceId: string | null;
+  transferCounterpartId: string | null;
 };
 
 export type ListTransactionsResponse = {
@@ -47,5 +49,10 @@ export type ListTransactionsParams = {
 
 export type UpdateTransactionInput = {
   categoryId?: string;
+  counterpartTransactionId?: string;
   active?: boolean;
+};
+
+export type TransferCandidatesResponse = {
+  items: TransactionItem[];
 };

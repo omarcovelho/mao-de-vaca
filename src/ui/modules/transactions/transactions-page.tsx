@@ -18,6 +18,7 @@ import { listAccounts } from '../accounts/api';
 import type { Origin } from '../accounts/types';
 import { listCategories } from '../categories/api';
 import * as transactionsApi from './api';
+import { LinkTransferModal } from './link-transfer-modal';
 import { formatMonthLabel, monthBounds, shiftMonth, toMonthKey } from './month';
 import { useRegime } from './regime-context';
 import type { TransactionItem } from './types';
@@ -69,6 +70,11 @@ export function TransactionsPage() {
     id: string;
     description: string;
     type: TransactionItem['type'];
+    categoryId: string;
+    amount: number;
+  } | null>(null);
+  const [transferLink, setTransferLink] = useState<{
+    source: TransactionItem;
     categoryId: string;
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -164,26 +170,64 @@ export function TransactionsPage() {
     [accounts],
   );
 
-  async function handleCategoryChange(id: string, nextCategoryId: string) {
+  async function handleCategoryChange(
+    id: string,
+    nextCategoryId: string,
+    counterpartTransactionId?: string,
+  ) {
     setBusyId(id);
     setError(null);
+    const previousCounterpartId =
+      items.find((item) => item.id === id)?.transferCounterpartId ?? null;
     try {
       const updated = await transactionsApi.updateTransaction(id, {
         categoryId: nextCategoryId,
+        counterpartTransactionId,
       });
       setItems((current) =>
-        current.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                category: updated.category,
-                active: updated.active,
-              }
-            : item,
-        ),
+        current.map((item) => {
+          if (item.id === id) {
+            return updated;
+          }
+          if (
+            updated.transferCounterpartId &&
+            item.id === updated.transferCounterpartId
+          ) {
+            return {
+              ...item,
+              type: 'TRANSFER' as const,
+              category: updated.category,
+              transferCounterpartId: updated.id,
+            };
+          }
+          if (
+            !updated.transferCounterpartId &&
+            previousCounterpartId &&
+            item.id === previousCounterpartId
+          ) {
+            const counterpartType =
+              updated.type === 'TRANSFER'
+                ? ('TRANSFER' as const)
+                : item.amount < 0
+                  ? ('EXPENSE' as const)
+                  : ('INCOME' as const);
+            return {
+              ...item,
+              type: counterpartType,
+              category: updated.category,
+              transferCounterpartId: null,
+            };
+          }
+          return item;
+        }),
       );
       setCategoryEdit(null);
-      toast.success('Categoria atualizada.');
+      setTransferLink(null);
+      toast.success(
+        counterpartTransactionId
+          ? 'Transferência vinculada.'
+          : 'Categoria atualizada.',
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Falha ao alterar categoria';
@@ -192,6 +236,32 @@ export function TransactionsPage() {
     } finally {
       setBusyId(null);
     }
+  }
+
+  function onConfirmCategoryEdit() {
+    if (!categoryEdit?.categoryId) {
+      return;
+    }
+    const leaf = leaves.find((item) => item.value === categoryEdit.categoryId);
+    if (leaf?.systemKey === 'INVOICE_PAYMENT') {
+      toast.error(
+        'Pagamento de fatura só pode ser classificado ao vincular na fatura.',
+      );
+      return;
+    }
+    if (leaf?.systemKey === 'ACCOUNT_TRANSFER') {
+      const source = items.find((item) => item.id === categoryEdit.id);
+      if (!source) {
+        return;
+      }
+      setTransferLink({
+        source,
+        categoryId: categoryEdit.categoryId,
+      });
+      setCategoryEdit(null);
+      return;
+    }
+    void handleCategoryChange(categoryEdit.id, categoryEdit.categoryId);
   }
 
   async function runDeactivate() {
@@ -235,13 +305,19 @@ export function TransactionsPage() {
     }
     return leaves
       .filter((leaf) => {
-        if (categoryEdit.type === 'EXPENSE') {
-          return leaf.kind === 'EXPENSE';
+        if (leaf.systemKey === 'INVOICE_PAYMENT') {
+          return false;
+        }
+        if (leaf.kind === 'NON_EXPENSE') {
+          return true;
+        }
+        if (categoryEdit.type === 'EXPENSE' || categoryEdit.type === 'TRANSFER') {
+          return leaf.kind === 'EXPENSE' || leaf.kind === 'NON_EXPENSE';
         }
         if (categoryEdit.type === 'INCOME') {
-          return leaf.kind === 'INCOME';
+          return leaf.kind === 'INCOME' || leaf.kind === 'NON_EXPENSE';
         }
-        return true;
+        return leaf.kind !== 'NON_EXPENSE' || Boolean(leaf.systemKey);
       })
       .map((leaf) => ({ value: leaf.value, label: leaf.label }));
   }, [categoryEdit, leaves]);
@@ -363,10 +439,15 @@ export function TransactionsPage() {
                       description: item.description,
                       type: item.type,
                       categoryId: item.category.id,
+                      amount: item.amount,
                     })
                   }
                 >
                   {item.category.name}
+                  {item.category.systemKey === 'ACCOUNT_TRANSFER' &&
+                  !item.transferCounterpartId
+                    ? ' · sem vínculo'
+                    : ''}
                 </button>
                 {item.card && item.invoiceId ? (
                   <Link
@@ -450,10 +531,29 @@ export function TransactionsPage() {
           }
         }}
         onConfirm={() => {
-          if (!categoryEdit?.categoryId) {
+          onConfirmCategoryEdit();
+        }}
+      />
+
+      <LinkTransferModal
+        open={transferLink !== null}
+        source={transferLink?.source ?? null}
+        categoryId={transferLink?.categoryId ?? ''}
+        busy={busyId === transferLink?.source.id}
+        onCancel={() => {
+          if (busyId !== transferLink?.source.id) {
+            setTransferLink(null);
+          }
+        }}
+        onConfirm={(counterpartId) => {
+          if (!transferLink) {
             return;
           }
-          void handleCategoryChange(categoryEdit.id, categoryEdit.categoryId);
+          void handleCategoryChange(
+            transferLink.source.id,
+            transferLink.categoryId,
+            counterpartId,
+          );
         }}
       />
 

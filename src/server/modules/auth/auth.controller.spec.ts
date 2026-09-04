@@ -154,6 +154,23 @@ describe('Auth HTTP', () => {
       .expect(401);
   });
 
+  it('GET /api/auth/me returns 401 for JWT whose user no longer exists', async () => {
+    const orphanToken = await jwtService.signAsync(
+      { sub: 'deleted-user-id', username: 'ghost' },
+      { expiresIn: '1h' },
+    );
+
+    await request(app.getHttpServer())
+      .get('/api/auth/me')
+      .set('Cookie', `${AUTH_COOKIE_NAME}=${orphanToken}`)
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .get('/api/setup/status')
+      .set('Cookie', `${AUTH_COOKIE_NAME}=${orphanToken}`)
+      .expect(401);
+  });
+
   it('GET /api/health remains public', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/health')

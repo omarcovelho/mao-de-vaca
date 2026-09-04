@@ -7,6 +7,7 @@ export type CategoryResponse = {
   kind: CategoryKind;
   color: string;
   icon: string;
+  systemKey: string | null;
   active: boolean;
   depth: number;
   isLeaf: boolean;

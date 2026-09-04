@@ -99,14 +99,6 @@ function parseAmount(raw: string): string | null {
   return negative ? `-${canonical}` : canonical;
 }
 
-function isTransferType(raw: string | undefined): boolean {
-  if (!raw) {
-    return false;
-  }
-  const normalized = normalizeHeader(raw);
-  return normalized === 'transferencia' || normalized === 'transfer';
-}
-
 export function parseStandardCsv(
   buffer: Buffer,
   options: ParseOptions = {},
@@ -164,7 +156,8 @@ export function parseStandardCsv(
     const category =
       rawCategory ||
       (mode === 'invoice' ? MISSING_CATEGORY_LABEL : '');
-    const tipo = index.tipo >= 0 ? cells[index.tipo] : undefined;
+    // Coluna tipo é ignorada — reclassificação NON_EXPENSE/TRANSFER é manual.
+    void (index.tipo >= 0 ? cells[index.tipo] : undefined);
 
     if (!date) {
       errors.push({ line: lineNumber, message: 'Data inválida' });
@@ -188,14 +181,8 @@ export function parseStandardCsv(
     }
 
     const isNegative = amount.startsWith('-');
-    let type: ParseResult['transactions'][number]['type'];
-    if (isTransferType(tipo)) {
-      type = 'TRANSFER';
-    } else if (mode === 'invoice') {
-      type = 'EXPENSE';
-    } else {
-      type = isNegative ? 'EXPENSE' : 'INCOME';
-    }
+    const type: ParseResult['transactions'][number]['type'] =
+      mode === 'invoice' ? 'EXPENSE' : isNegative ? 'EXPENSE' : 'INCOME';
 
     transactions.push({
       line: lineNumber,

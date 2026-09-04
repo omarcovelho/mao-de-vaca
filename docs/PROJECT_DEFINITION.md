@@ -97,7 +97,7 @@ Três tipos, com semântica distinta:
   - **Investimento** (aporte/resgate — ver 3.11);
   - e, de forma geral, qualquer movimentação entre as próprias contas do usuário.
 
-**Transferência entre contas próprias no extrato:** o mesmo movimento costuma aparecer em **dois CSVs** — por exemplo, saída na Itaú como valor negativo (despesa no parser) e entrada na Nubank como valor positivo (receita). No MVP cada arquivo é importado de forma independente (dois lançamentos, um por conta); não há casamento automático. Uma versão futura deve permitir **vínculo manual** das duas pernas (mesmo espírito do pagamento de fatura).
+**Transferência entre contas próprias no extrato:** o mesmo movimento costuma aparecer em **dois CSVs** — por exemplo, saída na Itaú como valor negativo (despesa no parser) e entrada na Nubank como valor positivo (receita). Cada arquivo é importado de forma independente; o usuário **vincula manualmente** as duas pernas em `/lancamentos` ao classificar como **Transferências entre contas** (modal de busca por valor). A importação **não** atribui categorias Não-despesa.
 
 Essa distinção é o que impede a **contagem duplicada**: as compras de cartão já são reconhecidas como despesa item a item na fatura; o pagamento da fatura, sendo transferência, move o caixa sem reintroduzir o gasto.
 
@@ -201,7 +201,6 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - Detecção automática de banco/tipo de arquivo ou de conta na importação.
 - Dedução automática de parcelamento a partir da descrição.
 - Casamento/dedução automática de pagamento ↔ fatura, ou estorno ↔ compra original.
-- Vínculo manual entre pernas de transferência importadas em extratos de contas distintas (despesa num arquivo, receita no outro).
 - Retroação de competência de estornos; cancelamento automático de parcelas futuras.
 - Controle de investimentos: rendimento, posição, custo, performance.
 - Orçamentos, metas, comparação competência × caixa lado a lado, e multi-moeda.
@@ -245,13 +244,16 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 ### 5.3 Lançamentos e regimes
 - **RF-06** — Cada lançamento é registrado com data de competência e, quando aplicável, data de caixa.
 - **RF-07** — Cada lançamento possui um tipo: despesa, receita ou transferência.
+- **RF-07a** — Categorias **Não-despesa** de sistema (Pagamento de fatura, Transferências entre contas, Aplicações/resgates) são obrigatórias para todo usuário; a importação CSV nunca as atribui — só reclassificação manual (ou vínculo de fatura).
+- **RF-07b** — Ao classificar como Transferências entre contas, o usuário vincula a outra perna (sinais opostos, mesmo valor absoluto); ambos ficam `TRANSFER` e fora dos relatórios.
+- **RF-07c** — Ao classificar como Aplicações/resgates, o lançamento vira `TRANSFER` sem vínculo e permanece listável, fora dos totais.
 - **RF-08** — O sistema apresenta os lançamentos alternando entre regime de competência e regime de caixa.
 - **RF-09** — No regime de caixa, gastos de débito/conta são reconhecidos na própria data; gastos de cartão são reconhecidos pelos eventos de pagamento de fatura.
 
 ### 5.4 Fatura, pagamento e estorno
 - **RF-10** — Faturas pertencem a um **Cartão** cadastrado (mês de referência, vencimento).
 - **RF-11** — O saldo e o status (em aberto, parcialmente paga, quitada) da fatura são derivados de suas compras, estornos e pagamentos vinculados.
-- **RF-12** — O usuário vincula manualmente um ou mais pagamentos a uma fatura; o débito ocorre em **Conta** cadastrada e a fatura pertence a **Cartão** cadastrado, suportando pagamento parcial e débito de instituição distinta do cartão.
+- **RF-12** — O usuário vincula manualmente um ou mais pagamentos a uma fatura; o débito ocorre em **Conta** cadastrada e a fatura pertence a **Cartão** cadastrado, suportando pagamento parcial e débito de instituição distinta do cartão; o lançamento recebe automaticamente a categoria **Pagamento de fatura**.
 - **RF-13** — Pagamentos de fatura e investimentos são registrados como transferências e não entram em nenhum total de gasto ou de receita.
 - **RF-14** — Estornos são registrados como lançamentos de sinal oposto, na fatura em que apareceram, e podem ser vinculados manualmente a uma compra-pai.
 
