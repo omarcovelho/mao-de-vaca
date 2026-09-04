@@ -4,31 +4,35 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../../components/app-shell';
 import { RequiresOrigins } from '../../components/requires-origins';
+import { ToastProvider } from '../../components/toast';
 import { AuthProvider } from '../auth/auth-context';
 import { ProtectedRoute } from '../auth/protected-route';
 import { SetupStatusProvider } from '../accounts/setup-status-context';
 import { RegimeProvider } from './regime-context';
 import { monthBounds, toMonthKey } from './month';
 import { TransactionsPage } from './transactions-page';
+import { chooseSearchableOption } from '../../test/searchable-select-helpers';
 
 function renderTransactionsApp(initialPath = '/lancamentos') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <AuthProvider>
-        <SetupStatusProvider>
-          <RegimeProvider>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route element={<RequiresOrigins />}>
-                    <Route path="/lancamentos" element={<TransactionsPage />} />
+      <ToastProvider>
+        <AuthProvider>
+          <SetupStatusProvider>
+            <RegimeProvider>
+              <Routes>
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppShell />}>
+                    <Route element={<RequiresOrigins />}>
+                      <Route path="/lancamentos" element={<TransactionsPage />} />
+                    </Route>
                   </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </RegimeProvider>
-        </SetupStatusProvider>
-      </AuthProvider>
+              </Routes>
+            </RegimeProvider>
+          </SetupStatusProvider>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -248,12 +252,13 @@ describe('Transactions UI flow', () => {
     expect(await screen.findByText('Cinema')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Alimentação' }));
 
-    const select = await screen.findByLabelText('Categoria de Cinema');
-    await user.selectOptions(select, 'leisure');
+    await chooseSearchableOption(user, 'Categoria de Cinema', /Lazer/);
 
     expect(await screen.findByRole('button', { name: 'Lazer' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Desativar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Desativar lançamento' });
+    await user.click(within(dialog).getByRole('button', { name: 'Desativar' }));
 
     await vi.waitFor(() => {
       expect(screen.queryByText('Cinema')).not.toBeInTheDocument();
@@ -311,8 +316,7 @@ describe('Transactions UI flow', () => {
       await screen.findByText('Nenhum lançamento neste período.'),
     ).toBeInTheDocument();
 
-    const accountSelect = screen.getByLabelText('Conta');
-    await user.selectOptions(accountSelect, 'acc-2');
+    await chooseSearchableOption(user, 'Filtro de conta', 'Itaú');
 
     await vi.waitFor(() => {
       expect(listCalls.at(-1)).toContain('accountId=acc-2');

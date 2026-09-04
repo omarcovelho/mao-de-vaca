@@ -44,7 +44,7 @@ Após **V2.5**, o módulo de categorias existe antes de qualquer importação. A
 | “Construir todas as telas” | Entregar **telas do fluxo** que o épico demonstra |
 | “Polir português no final” | **Copy PT** na tela que o épico introduz |
 
-Preocupações transversais (logging, validação, testes TDD) são **tarefas dentro de cada épico**, não épicos separados.
+Preocupações transversais (logging, validação, testes — TDD no server; Vitest na UI após a implementação) são **tarefas dentro de cada épico**, não épicos separados.
 
 ---
 
@@ -359,7 +359,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 4. **Roteiro de demo** — um parágrafo: usuário faz X, espera Y.
 5. **Adiar** — o que não é necessário para demonstrar este slice.
 
-**Regras:** sem imports `server/` ↔ `ui/`; TDD obrigatório ([quality-gate.mdc](../.cursor/rules/quality-gate.mdc)); copy em português.
+**Regras:** sem imports `server/` ↔ `ui/`; qualidade de testes conforme [quality-gate.mdc](../.cursor/rules/quality-gate.mdc) (TDD no server; UI testa depois); copy em português.
 
 ---
 
@@ -395,7 +395,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 | [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD) | Escopo, conceitos e requisitos funcionais |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Arquitetura técnica e API |
 | [.cursor/rules/architecture.mdc](../.cursor/rules/architecture.mdc) | Regras Cursor — fronteiras |
-| [.cursor/rules/quality-gate.mdc](../.cursor/rules/quality-gate.mdc) | TDD e Definition of Done |
+| [.cursor/rules/quality-gate.mdc](../.cursor/rules/quality-gate.mdc) | Testes e Definition of Done (TDD no server; UI após implementação) |
 | `docs/epics/V0_PLATFORM.md` | *(a criar)* Spec detalhada V0 |
 
 ---

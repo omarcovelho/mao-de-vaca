@@ -1,7 +1,13 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ToastProvider } from '../../components/toast';
 import { InvoiceDetailPanel } from './invoice-detail-panel';
+
+function renderPanel(ui: ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 describe('Invoice payment link UI', () => {
   beforeEach(() => {
@@ -139,7 +145,7 @@ describe('Invoice payment link UI', () => {
       return new Response(null, { status: 404 });
     });
 
-    render(
+    renderPanel(
       <InvoiceDetailPanel
         invoiceId="inv-1"
         onBack={() => undefined}
@@ -159,6 +165,8 @@ describe('Invoice payment link UI', () => {
     expect(candidateRow).toBeTruthy();
     await user.click(within(candidateRow!).getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: 'Confirmar vínculo' }));
+    const dialog = screen.getByRole('dialog', { name: 'Vincular pagamento' });
+    await user.click(within(dialog).getByRole('button', { name: 'Vincular' }));
 
     expect(await screen.findByText(/Quitada/)).toBeInTheDocument();
     expect(screen.getByText('Pagamentos vinculados')).toBeInTheDocument();
@@ -198,7 +206,7 @@ describe('Invoice payment link UI', () => {
       return new Response(null, { status: 404 });
     });
 
-    render(
+    renderPanel(
       <InvoiceDetailPanel invoiceId="inv-2" onBack={() => undefined} />,
     );
 

@@ -75,6 +75,7 @@ export type ImportHistoryItem = {
   accountLabel: string | null;
   cardId?: string | null;
   cardLabel?: string | null;
+  bankName?: string | null;
   invoiceId?: string | null;
   invoiceReferenceMonth?: string | null;
   createdCount: number;

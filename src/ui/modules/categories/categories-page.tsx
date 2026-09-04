@@ -1,5 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { ConfirmModal } from '../../components/confirm-modal';
 import { PageHeader } from '../../components/page-header';
+import { SearchableSelect } from '../../components/searchable-select';
+import { useToast } from '../../components/toast';
 import * as categoriesApi from './api';
 import {
   CATEGORY_ICON_OPTIONS,
@@ -9,6 +12,17 @@ import {
 import type { Category, CategoryKind } from './types';
 
 const MAX_DEPTH = 5;
+
+const KIND_OPTIONS = [
+  { value: 'EXPENSE', label: 'Gasto' },
+  { value: 'INCOME', label: 'Renda' },
+  { value: 'NON_EXPENSE', label: 'Não-despesa' },
+];
+
+const ICON_OPTIONS = CATEGORY_ICON_OPTIONS.map((option) => ({
+  value: option.key,
+  label: option.label,
+}));
 
 function CategoryTreeRows({
   nodes,
@@ -89,7 +103,7 @@ function CategoryTreeRows({
                 <button
                   type="button"
                   className="btn btn--ghost btn--compact"
-                  onClick={() => void onDeactivate(node.id)}
+                  onClick={() => onDeactivate(node.id)}
                 >
                   Desativar
                 </button>
@@ -114,6 +128,7 @@ function CategoryTreeRows({
 }
 
 export function CategoriesPage() {
+  const toast = useToast();
   const [tree, setTree] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +136,8 @@ export function CategoriesPage() {
   const [editing, setEditing] = useState<Category | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [deactivateId, setDeactivateId] = useState<string | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   const [name, setName] = useState('');
   const [kind, setKind] = useState<CategoryKind>('EXPENSE');
@@ -233,14 +250,39 @@ export function CategoriesPage() {
     }
   }
 
-  async function handleDeactivate(id: string) {
+  async function runDeactivate() {
+    if (!deactivateId) {
+      return;
+    }
+    setDeactivating(true);
     setError(null);
     try {
-      await categoriesApi.deactivateCategory(id);
+      await categoriesApi.deactivateCategory(deactivateId);
+      setDeactivateId(null);
       await load();
+      toast.success('Categoria desativada.');
     } catch {
-      setError('Não foi possível desativar a categoria.');
+      const message = 'Não foi possível desativar a categoria.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDeactivating(false);
     }
+  }
+
+  function findCategoryName(nodes: Category[], id: string): string | null {
+    for (const node of nodes) {
+      if (node.id === id) {
+        return node.name;
+      }
+      if (node.children?.length) {
+        const found = findCategoryName(node.children, id);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return null;
   }
 
   return (
@@ -283,14 +325,12 @@ export function CategoriesPage() {
             {!editing && mode === 'root' ? (
               <label>
                 Tipo
-                <select
+                <SearchableSelect
+                  aria-label="Tipo"
+                  options={KIND_OPTIONS}
                   value={kind}
-                  onChange={(e) => setKind(e.target.value as CategoryKind)}
-                >
-                  <option value="EXPENSE">Gasto</option>
-                  <option value="INCOME">Renda</option>
-                  <option value="NON_EXPENSE">Não-despesa</option>
-                </select>
+                  onChange={(value) => setKind(value as CategoryKind)}
+                />
               </label>
             ) : null}
 
@@ -309,16 +349,12 @@ export function CategoriesPage() {
 
             <label>
               Ícone
-              <select
+              <SearchableSelect
+                aria-label="Ícone"
+                options={ICON_OPTIONS}
                 value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-              >
-                {CATEGORY_ICON_OPTIONS.map((option) => (
-                  <option key={option.key} value={option.key}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={setIcon}
+              />
             </label>
 
             <div className="category-icon-preview" aria-hidden>
@@ -368,9 +404,28 @@ export function CategoriesPage() {
           onToggle={toggleExpanded}
           onAddChild={openCreateChild}
           onEdit={openEdit}
-          onDeactivate={handleDeactivate}
+          onDeactivate={setDeactivateId}
         />
       )}
+
+      <ConfirmModal
+        open={deactivateId !== null}
+        title="Desativar categoria"
+        description={
+          deactivateId
+            ? `Desativar “${findCategoryName(tree, deactivateId) ?? 'esta categoria'}”? Subcategorias também serão desativadas.`
+            : null
+        }
+        confirmLabel="Desativar"
+        variant="danger"
+        busy={deactivating}
+        onCancel={() => {
+          if (!deactivating) {
+            setDeactivateId(null);
+          }
+        }}
+        onConfirm={() => void runDeactivate()}
+      />
     </section>
   );
 }

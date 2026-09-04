@@ -470,7 +470,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 | ORM | Prisma | Migrations, tipagem, PostgreSQL — restrito a `server/` |
 | DB | PostgreSQL | PROJECT_DEFINITION §7.1 |
 | Auth | Passport local + JWT em cookie httpOnly | Simples para usuário único MVP |
-| Testes | Jest (`server/`) + Vitest (`ui/`) | TDD nos módulos de domínio, parsers e componentes |
+| Testes | Jest (`server/`) + Vitest (`ui/`) | TDD no `server/`; na UI, testes Vitest após a implementação ([quality-gate.mdc](../.cursor/rules/quality-gate.mdc)) |
 | Orquestração | Docker Compose | App + PostgreSQL |
 
 ### Variáveis de ambiente (produção)

@@ -417,8 +417,20 @@ export class ImportService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       include: {
-        account: { select: { id: true, label: true } },
-        card: { select: { id: true, label: true } },
+        account: {
+          select: {
+            id: true,
+            label: true,
+            bank: { select: { name: true } },
+          },
+        },
+        card: {
+          select: {
+            id: true,
+            label: true,
+            bank: { select: { name: true } },
+          },
+        },
         invoice: { select: { id: true, referenceMonth: true } },
       },
     });
@@ -432,6 +444,8 @@ export class ImportService {
       accountLabel: batch.account?.label ?? null,
       cardId: batch.cardId,
       cardLabel: batch.card?.label ?? null,
+      bankName:
+        batch.card?.bank.name ?? batch.account?.bank.name ?? null,
       invoiceId: batch.invoiceId,
       invoiceReferenceMonth: batch.invoice
         ? batch.invoice.referenceMonth.toISOString().slice(0, 10)

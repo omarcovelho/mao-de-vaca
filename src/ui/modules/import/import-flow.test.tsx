@@ -1,9 +1,10 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../../components/app-shell';
 import { RequiresOrigins } from '../../components/requires-origins';
+import { ToastProvider } from '../../components/toast';
 import { AuthProvider } from '../auth/auth-context';
 import { ProtectedRoute } from '../auth/protected-route';
 import { HomePage } from '../accounts/home-page';
@@ -17,25 +18,27 @@ import { ImportPage } from './import-page';
 function renderImportApp(initialPath = '/importar') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <AuthProvider>
-        <SetupStatusProvider>
-          <RegimeProvider>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/contas" element={<AccountsPage />} />
-                  <Route path="/cartoes" element={<CardsPage />} />
-                  <Route element={<RequiresOrigins />}>
-                    <Route path="/importar" element={<ImportPage />} />
-                    <Route path="/lancamentos" element={<TransactionsPage />} />
+      <ToastProvider>
+        <AuthProvider>
+          <SetupStatusProvider>
+            <RegimeProvider>
+              <Routes>
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/contas" element={<AccountsPage />} />
+                    <Route path="/cartoes" element={<CardsPage />} />
+                    <Route element={<RequiresOrigins />}>
+                      <Route path="/importar" element={<ImportPage />} />
+                      <Route path="/lancamentos" element={<TransactionsPage />} />
+                    </Route>
                   </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </RegimeProvider>
-        </SetupStatusProvider>
-      </AuthProvider>
+              </Routes>
+            </RegimeProvider>
+          </SetupStatusProvider>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -97,6 +100,7 @@ describe('Import UI flow', () => {
 
   it('previews unknown categories then confirms import counts', async () => {
     const user = userEvent.setup();
+    let history: unknown[] = [];
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       const url = String(input);
       if (url.includes('/api/auth/me')) {
@@ -108,8 +112,8 @@ describe('Import UI flow', () => {
       if (url.includes('/api/imports/options')) {
         return Response.json(defaultOptions);
       }
-      if (url.endsWith('/api/imports') && (!init || init.method === undefined)) {
-        return Response.json([]);
+      if (url.endsWith('/api/imports') && (!init?.method || init.method === 'GET')) {
+        return Response.json(history);
       }
       if (url.includes('/api/categories')) {
         return Response.json([
@@ -162,6 +166,21 @@ describe('Import UI flow', () => {
         });
       }
       if (url.includes('/api/imports/confirm')) {
+        history = [
+          {
+            id: 'batch-1',
+            importMode: 'transactions',
+            parserId: 'standard',
+            fileName: 'extrato.csv',
+            accountId: 'acc-1',
+            accountLabel: 'Nubank CC',
+            bankName: 'Nubank',
+            createdCount: 2,
+            skippedCount: 0,
+            errorCount: 0,
+            createdAt: '2026-01-20T00:00:00.000Z',
+          },
+        ];
         return Response.json({
           id: 'batch-1',
           importBatchId: 'batch-1',
@@ -170,22 +189,6 @@ describe('Import UI flow', () => {
           deselected: 0,
           errors: [],
         });
-      }
-      if (url.endsWith('/api/imports')) {
-        return Response.json([
-          {
-            id: 'batch-1',
-            importMode: 'transactions',
-            parserId: 'standard',
-            fileName: 'extrato.csv',
-            accountId: 'acc-1',
-            accountLabel: 'Nubank CC',
-            createdCount: 2,
-            skippedCount: 0,
-            errorCount: 0,
-            createdAt: '2026-01-20T00:00:00.000Z',
-          },
-        ]);
       }
       return new Response(null, { status: 404 });
     });
@@ -223,14 +226,23 @@ describe('Import UI flow', () => {
     ).toBeChecked();
 
     await user.click(screen.getByRole('button', { name: 'Confirmar importação' }));
+    expect(
+      screen.getByRole('dialog', { name: 'Confirmar importação' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Importar' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      '2 criados, 0 ignorados',
-    );
+    expect(
+      await screen.findAllByText(/2 criados, 0 ignorados/),
+    ).not.toHaveLength(0);
     expect(
       screen.getByRole('link', { name: 'Ver lançamentos' }),
     ).toHaveAttribute('href', '/lancamentos');
     expect(await screen.findByText('extrato.csv')).toBeInTheDocument();
+    expect(screen.getByText(/Nubank · Nubank CC/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Pré-visualização' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Arraste o CSV aqui')).toBeInTheDocument();
 
     const confirmCall = vi
       .mocked(fetch)
@@ -377,7 +389,6 @@ describe('Import UI flow', () => {
 
   it('deletes an import from history after confirmation', async () => {
     const user = userEvent.setup();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     let historyCalls = 0;
 
     vi.mocked(fetch).mockImplementation(async (input, init) => {
@@ -424,19 +435,19 @@ describe('Import UI flow', () => {
     renderImportApp();
 
     expect(await screen.findByText('extrato.csv')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    await user.click(
+      screen.getByRole('button', { name: /Excluir importação extrato\.csv/i }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Excluir importação' });
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir' }));
 
-    expect(confirmSpy).toHaveBeenCalled();
     expect(
       await screen.findByText('Nenhuma importação ainda.'),
     ).toBeInTheDocument();
-
-    confirmSpy.mockRestore();
   });
 
   it('shows API error when delete is blocked', async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       const url = String(input);
@@ -481,11 +492,15 @@ describe('Import UI flow', () => {
     renderImportApp();
 
     expect(await screen.findByText('fatura.csv')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+    await user.click(
+      screen.getByRole('button', { name: /Excluir importação fatura\.csv/i }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Excluir importação' });
+    await user.click(within(dialog).getByRole('button', { name: 'Excluir' }));
 
     expect(
-      await screen.findByRole('alert'),
-    ).toHaveTextContent(/fatura já está quitada/i);
+      await screen.findAllByText(/fatura já está quitada/i),
+    ).not.toHaveLength(0);
   });
 
   it('switches to invoice mode with card and invoice selectors', async () => {
@@ -523,7 +538,9 @@ describe('Import UI flow', () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Cartão')).toBeInTheDocument();
     expect(screen.getByLabelText('Fatura')).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: /08\/2026/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Fatura' })).toHaveTextContent(
+      /08\/2026/i,
+    );
   });
 
   it('redirects to setup when there are no accounts or cards', async () => {

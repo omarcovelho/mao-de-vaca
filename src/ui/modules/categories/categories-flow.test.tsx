@@ -1,32 +1,36 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../../components/app-shell';
+import { ToastProvider } from '../../components/toast';
 import { AuthProvider } from '../auth/auth-context';
 import { ProtectedRoute } from '../auth/protected-route';
 import { HomePage } from '../accounts/home-page';
 import { SetupStatusProvider } from '../accounts/setup-status-context';
 import { RegimeProvider } from '../transactions/regime-context';
+import { chooseSearchableOption } from '../../test/searchable-select-helpers';
 import { CategoriesPage } from './categories-page';
 
 function renderCategoriesApp(initialPath = '/categorias') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <AuthProvider>
-        <SetupStatusProvider>
-          <RegimeProvider>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/categorias" element={<CategoriesPage />} />
+      <ToastProvider>
+        <AuthProvider>
+          <SetupStatusProvider>
+            <RegimeProvider>
+              <Routes>
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/categorias" element={<CategoriesPage />} />
+                  </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </RegimeProvider>
-        </SetupStatusProvider>
-      </AuthProvider>
+              </Routes>
+            </RegimeProvider>
+          </SetupStatusProvider>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -238,7 +242,7 @@ describe('Categories UI flow', () => {
     const nameInput = screen.getByLabelText('Nome');
     await user.clear(nameInput);
     await user.type(nameInput, 'Lazer/Entretenimento');
-    await user.selectOptions(screen.getByLabelText('Ícone'), 'sparkles');
+    await chooseSearchableOption(user, 'Ícone', 'Assinaturas');
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
 
     expect(
@@ -331,6 +335,8 @@ describe('Categories UI flow', () => {
     renderCategoriesApp();
     await screen.findByText('Doações');
     await user.click(screen.getByRole('button', { name: 'Desativar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Desativar categoria' });
+    await user.click(within(dialog).getByRole('button', { name: 'Desativar' }));
 
     expect(
       await screen.findByText(/Nenhuma categoria ativa/i),

@@ -1,8 +1,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { flattenCategoryLeaves } from '../../components/category-leaves';
+import type { CategoryLeafOption } from '../../components/category-leaves';
+import { ConfirmModal } from '../../components/confirm-modal';
 import { PageHeader } from '../../components/page-header';
+import { SearchableSelect } from '../../components/searchable-select';
+import { useToast } from '../../components/toast';
 import { listCategories } from '../categories/api';
-import type { Category } from '../categories/types';
 import * as importApi from './api';
 import type {
   CategoryMappingValue,
@@ -26,23 +30,16 @@ const WARNING_LABELS = {
   within_file: 'Possível duplicata no arquivo',
 } as const;
 
+const MAPPING_MODE_OPTIONS = [
+  { value: 'create', label: 'Criar nova' },
+  { value: 'existing', label: 'Usar existente' },
+];
+
 type MappingDraft = {
   mode: 'existing' | 'create';
   categoryId: string;
   name: string;
 };
-
-function flattenLeaves(nodes: Category[]): Category[] {
-  const leaves: Category[] = [];
-  for (const node of nodes) {
-    if (node.children && node.children.length > 0) {
-      leaves.push(...flattenLeaves(node.children));
-    } else if (node.isLeaf) {
-      leaves.push(node);
-    }
-  }
-  return leaves;
-}
 
 function mappingsReady(
   unknown: string[],
@@ -101,11 +98,37 @@ function validPreviewRows(rows: PreviewRow[]): PreviewRow[] {
   return rows.filter((row) => !row.error);
 }
 
+function formatHistoryOrigin(item: ImportHistoryItem): string {
+  const origin =
+    item.importMode === 'invoice'
+      ? (item.cardLabel ?? 'Cartão')
+      : (item.accountLabel ?? 'Conta');
+  if (item.bankName) {
+    return `${item.bankName} · ${origin}`;
+  }
+  return origin;
+}
+
+function formatResultSummary(result: ConfirmResponse): string {
+  const parts = [
+    `${result.created} criados`,
+    `${result.skipped} ignorados`,
+  ];
+  if (typeof result.deselected === 'number') {
+    parts.push(`${result.deselected} desmarcados`);
+  }
+  if (result.errors.length > 0) {
+    parts.push(`${result.errors.length} erros`);
+  }
+  return parts.join(', ') + '.';
+}
+
 export function ImportPage() {
+  const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<ImportOptions | null>(null);
   const [history, setHistory] = useState<ImportHistoryItem[]>([]);
-  const [leaves, setLeaves] = useState<Category[]>([]);
+  const [leaves, setLeaves] = useState<CategoryLeafOption[]>([]);
   const [importMode, setImportMode] = useState<ImportModeId>('transactions');
   const [accountId, setAccountId] = useState('');
   const [cardId, setCardId] = useState('');
@@ -113,12 +136,18 @@ export function ImportPage() {
   const [parserId, setParserId] = useState('standard');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<'preview' | 'confirm' | null>(null);
+  const [busy, setBusy] = useState<'preview' | 'confirm' | 'delete' | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
   const [drafts, setDrafts] = useState<Record<string, MappingDraft>>({});
   const [result, setResult] = useState<ConfirmResponse | null>(null);
+  const [confirmImportOpen, setConfirmImportOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ImportHistoryItem | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -134,7 +163,7 @@ export function ImportPage() {
         }
         setOptions(nextOptions);
         setHistory(nextHistory);
-        setLeaves(flattenLeaves(tree));
+        setLeaves(flattenCategoryLeaves(tree));
         setParserId(nextOptions.parsers[0]?.id ?? 'standard');
         setAccountId((current) => current || nextOptions.accounts[0]?.id || '');
         const cards = nextOptions.cards ?? [];
@@ -204,13 +233,66 @@ export function ImportPage() {
   }, [preview, file, drafts, selectedCount, unknownForSelected]);
 
   const originReady =
-    importMode === 'transactions' ? Boolean(accountId) : Boolean(cardId && invoiceId);
+    importMode === 'transactions'
+      ? Boolean(accountId)
+      : Boolean(cardId && invoiceId);
+
+  const accountOptions = useMemo(
+    () =>
+      (options?.accounts ?? []).map((account) => ({
+        value: account.id,
+        label: `${account.label} · ${account.bank.name}`,
+      })),
+    [options],
+  );
+
+  const cardOptions = useMemo(
+    () =>
+      (options?.cards ?? []).map((card) => ({
+        value: card.id,
+        label: `${card.label} · ${card.bank.name}`,
+      })),
+    [options],
+  );
+
+  const invoiceOptions = useMemo(
+    () =>
+      cardInvoices.map((invoice) => ({
+        value: invoice.id,
+        label: `${formatMonth(invoice.referenceMonth)} · vence ${invoice.dueDate}`,
+      })),
+    [cardInvoices],
+  );
+
+  const parserOptions = useMemo(
+    () =>
+      (options?.parsers ?? []).map((parser) => ({
+        value: parser.id,
+        label: parser.label,
+      })),
+    [options],
+  );
+
+  const leafOptions = useMemo(
+    () => leaves.map((leaf) => ({ value: leaf.value, label: leaf.label })),
+    [leaves],
+  );
+
+  function clearWorkingState() {
+    setFile(null);
+    setPreview(null);
+    setSelectedLines(new Set());
+    setDrafts({});
+    setError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
 
   function handleFile(next: File | null) {
     setFile(next);
     setPreview(null);
     setSelectedLines(new Set());
-    setResult(null);
     setDrafts({});
     setError(null);
   }
@@ -218,6 +300,7 @@ export function ImportPage() {
   function switchMode(mode: ImportModeId) {
     setImportMode(mode);
     handleFile(null);
+    setResult(null);
   }
 
   function toggleLine(line: number) {
@@ -291,13 +374,15 @@ export function ImportPage() {
         ),
       );
     } catch {
-      setError('Não foi possível pré-visualizar o arquivo.');
+      const message = 'Não foi possível pré-visualizar o arquivo.';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleConfirm() {
+  async function runConfirmImport() {
     if (!file || !preview || !canConfirm) {
       return;
     }
@@ -326,36 +411,41 @@ export function ImportPage() {
       setResult(next);
       setHistory(await importApi.listImportHistory());
       setOptions(await importApi.getImportOptions());
+      setLeaves(flattenCategoryLeaves(await listCategories()));
+      clearWorkingState();
+      setConfirmImportOpen(false);
+      toast.success(`Importação concluída: ${formatResultSummary(next)}`);
     } catch (err) {
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : 'Não foi possível confirmar a importação.',
-      );
+          : 'Não foi possível confirmar a importação.';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(null);
     }
   }
 
-  async function handleDeleteBatch(item: ImportHistoryItem) {
-    const confirmed = window.confirm(
-      `Excluir permanentemente ${item.createdCount} lançamento(s) de “${item.fileName}”? A fatura (se houver) não será removida.`,
-    );
-    if (!confirmed) {
+  async function runDeleteBatch() {
+    if (!deleteTarget) {
       return;
     }
-    setBusy('confirm');
+    setBusy('delete');
     setError(null);
     try {
-      await importApi.deleteImport(item.id);
+      await importApi.deleteImport(deleteTarget.id);
       setHistory(await importApi.listImportHistory());
       setResult(null);
+      setDeleteTarget(null);
+      toast.success('Importação excluída.');
     } catch (err) {
-      setError(
+      const message =
         err instanceof Error
           ? err.message
-          : 'Não foi possível excluir a importação.',
-      );
+          : 'Não foi possível excluir a importação.';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(null);
     }
@@ -396,6 +486,26 @@ export function ImportPage() {
         subtitle="Envie um CSV do seu banco ou cartão"
       />
 
+      {result ? (
+        <div className="import-result" role="status">
+          <p className="status-pill status-pill--success">
+            {formatResultSummary(result)}
+          </p>
+          <Link to="/lancamentos" className="btn btn--secondary btn--compact">
+            Ver lançamentos
+          </Link>
+          {result.errors.length > 0 ? (
+            <ul className="import-result__errors">
+              {result.errors.map((item) => (
+                <li key={`${item.line}-${item.message}`}>
+                  Linha {item.line}: {item.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
       <form
         className="form-panel import-form"
         onSubmit={(e) => void handlePreview(e)}
@@ -430,19 +540,17 @@ export function ImportPage() {
 
         {importMode === 'transactions' ? (
           <div className="form-stack">
-            <label htmlFor="import-account">Origem</label>
+            <label id="import-account-label" htmlFor="import-account">
+              Origem
+            </label>
             {hasAccounts ? (
-              <select
+              <SearchableSelect
                 id="import-account"
+                aria-label="Origem"
+                options={accountOptions}
                 value={accountId}
-                onChange={(event) => setAccountId(event.target.value)}
-              >
-                {options?.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.label} · {account.bank.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setAccountId}
+              />
             ) : (
               <p className="form-hint">
                 Nenhuma conta ativa.{' '}
@@ -454,17 +562,13 @@ export function ImportPage() {
           <>
             <div className="form-stack">
               <label htmlFor="import-card">Cartão</label>
-              <select
+              <SearchableSelect
                 id="import-card"
+                aria-label="Cartão"
+                options={cardOptions}
                 value={cardId}
-                onChange={(event) => setCardId(event.target.value)}
-              >
-                {options?.cards?.map((card) => (
-                  <option key={card.id} value={card.id}>
-                    {card.label} · {card.bank.name}
-                  </option>
-                ))}
-              </select>
+                onChange={setCardId}
+              />
             </div>
             <div className="form-stack">
               <label htmlFor="import-invoice">Fatura</label>
@@ -474,18 +578,13 @@ export function ImportPage() {
                   <Link to="/cartoes">Criar fatura</Link>
                 </p>
               ) : (
-                <select
+                <SearchableSelect
                   id="import-invoice"
+                  aria-label="Fatura"
+                  options={invoiceOptions}
                   value={invoiceId}
-                  onChange={(event) => setInvoiceId(event.target.value)}
-                >
-                  {cardInvoices.map((invoice) => (
-                    <option key={invoice.id} value={invoice.id}>
-                      {formatMonth(invoice.referenceMonth)} · vence{' '}
-                      {invoice.dueDate}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setInvoiceId}
+                />
               )}
             </div>
           </>
@@ -493,17 +592,13 @@ export function ImportPage() {
 
         <div className="form-stack">
           <label htmlFor="import-parser">Parser</label>
-          <select
+          <SearchableSelect
             id="import-parser"
+            aria-label="Parser"
+            options={parserOptions}
             value={parserId}
-            onChange={(event) => setParserId(event.target.value)}
-          >
-            {options?.parsers.map((parser) => (
-              <option key={parser.id} value={parser.id}>
-                {parser.label}
-              </option>
-            ))}
-          </select>
+            onChange={setParserId}
+          />
         </div>
 
         <div className="form-stack">
@@ -650,45 +745,40 @@ export function ImportPage() {
                     <legend>{name || '(sem categoria)'}</legend>
                     <label>
                       Ação
-                      <select
+                      <SearchableSelect
+                        aria-label={`Ação para ${name || 'sem categoria'}`}
+                        options={MAPPING_MODE_OPTIONS}
                         value={draft?.mode ?? 'create'}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           setDrafts((current) => ({
                             ...current,
                             [name]: {
-                              mode: event.target.value as MappingDraft['mode'],
+                              mode: value as MappingDraft['mode'],
                               categoryId: current[name]?.categoryId ?? '',
                               name: current[name]?.name ?? name,
                             },
                           }))
                         }
-                      >
-                        <option value="create">Criar nova</option>
-                        <option value="existing">Usar existente</option>
-                      </select>
+                      />
                     </label>
                     {draft?.mode === 'existing' ? (
                       <label>
                         Categoria
-                        <select
+                        <SearchableSelect
+                          aria-label={`Categoria existente para ${name || 'sem categoria'}`}
+                          options={leafOptions}
                           value={draft.categoryId}
-                          onChange={(event) =>
+                          onChange={(value) =>
                             setDrafts((current) => ({
                               ...current,
                               [name]: {
                                 ...current[name],
-                                categoryId: event.target.value,
+                                categoryId: value,
                               },
                             }))
                           }
-                        >
-                          <option value="">Selecione</option>
-                          {leaves.map((leaf) => (
-                            <option key={leaf.id} value={leaf.id}>
-                              {leaf.name}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder="Selecione"
+                        />
                       </label>
                     ) : (
                       <label>
@@ -719,9 +809,9 @@ export function ImportPage() {
               type="button"
               className="btn btn--primary"
               disabled={!canConfirm || busy !== null}
-              onClick={() => void handleConfirm()}
+              onClick={() => setConfirmImportOpen(true)}
             >
-              Confirmar importação
+              {busy === 'confirm' ? 'Confirmando…' : 'Confirmar importação'}
             </button>
             {selectedCount === 0 ? (
               <p className="form-hint">
@@ -730,24 +820,6 @@ export function ImportPage() {
             ) : null}
           </div>
         </section>
-      ) : null}
-
-      {result ? (
-        <div className="import-result" role="status">
-          <p className="status-pill status-pill--success">
-            {result.created} criados, {result.skipped} ignorados
-            {typeof result.deselected === 'number'
-              ? `, ${result.deselected} desmarcados`
-              : ''}
-            {result.errors.length > 0
-              ? `, ${result.errors.length} erros`
-              : ''}
-            .
-          </p>
-          <Link to="/lancamentos" className="btn btn--secondary btn--compact">
-            Ver lançamentos
-          </Link>
-        </div>
       ) : null}
 
       <section className="section" aria-labelledby="history-heading">
@@ -765,26 +837,73 @@ export function ImportPage() {
                 <div className="import-history__meta">
                   <strong>{item.fileName}</strong>
                   <span>
-                    {item.importMode === 'invoice'
-                      ? (item.cardLabel ?? 'Cartão')
-                      : (item.accountLabel ?? 'Conta')}{' '}
-                    · {item.createdCount} criados, {item.skippedCount}{' '}
-                    ignorados
+                    {formatHistoryOrigin(item)} · {item.createdCount}{' '}
+                    criados, {item.skippedCount} ignorados
                   </span>
                 </div>
                 <button
                   type="button"
-                  className="btn btn--secondary btn--compact"
+                  className="btn btn--ghost btn--icon import-history__delete"
                   disabled={busy !== null}
-                  onClick={() => void handleDeleteBatch(item)}
+                  aria-label={`Excluir importação ${item.fileName}`}
+                  title="Excluir"
+                  onClick={() => setDeleteTarget(item)}
                 >
-                  Excluir
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="1.1em"
+                    height="1.1em"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M4 7h16" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+                    <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  </svg>
                 </button>
               </li>
             ))}
           </ul>
         )}
       </section>
+
+      <ConfirmModal
+        open={confirmImportOpen}
+        title="Confirmar importação"
+        description={`Importar ${selectedCount} linha(s) selecionada(s)? Esta ação cria lançamentos no sistema.`}
+        confirmLabel="Importar"
+        busy={busy === 'confirm'}
+        onCancel={() => {
+          if (busy !== 'confirm') {
+            setConfirmImportOpen(false);
+          }
+        }}
+        onConfirm={() => void runConfirmImport()}
+      />
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        title="Excluir importação"
+        description={
+          deleteTarget
+            ? `Excluir permanentemente ${deleteTarget.createdCount} lançamento(s) de “${deleteTarget.fileName}”? A fatura (se houver) não será removida.`
+            : null
+        }
+        confirmLabel="Excluir"
+        variant="danger"
+        busy={busy === 'delete'}
+        onCancel={() => {
+          if (busy !== 'delete') {
+            setDeleteTarget(null);
+          }
+        }}
+        onConfirm={() => void runDeleteBatch()}
+      />
     </section>
   );
 }

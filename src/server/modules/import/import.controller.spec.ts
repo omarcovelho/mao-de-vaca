@@ -298,6 +298,9 @@ describe('Import HTTP', () => {
       createdCount: 0,
       skippedCount: 3,
       fileName: 'extrato.csv',
+      accountLabel: 'Nubank CC',
+      bankName: 'Nubank',
+      importMode: 'transactions',
     });
   });
 
@@ -464,6 +467,18 @@ describe('Import HTTP', () => {
       .expect(200);
 
     expect(confirm.body).toMatchObject({ created: 2, skipped: 0 });
+
+    const history = await request(app.getHttpServer())
+      .get('/api/imports')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(history.body[0]).toMatchObject({
+      importMode: 'invoice',
+      fileName: 'fatura.csv',
+      cardLabel: 'Nubank Roxinho',
+      bankName: 'Nubank',
+    });
 
     const rows = await prisma.transaction.findMany({
       where: { userId, invoiceId: invoice.id },
