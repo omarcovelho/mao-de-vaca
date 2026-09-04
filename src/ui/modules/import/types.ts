@@ -30,6 +30,8 @@ export type ImportOptions = {
   invoicesByCard: Record<string, ImportInvoiceOption[]>;
 };
 
+export type DuplicateWarning = 'existing' | 'within_file';
+
 export type PreviewRow = {
   line: number;
   competenceDate?: string;
@@ -39,6 +41,7 @@ export type PreviewRow = {
   type?: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
   category?: string;
   categoryId?: string | null;
+  duplicateWarning?: DuplicateWarning | null;
   error?: string;
 };
 
@@ -50,6 +53,7 @@ export type PreviewResponse = {
     validCount: number;
     errorCount: number;
     unknownCategoryCount: number;
+    duplicateWarningCount?: number;
   };
 };
 
@@ -58,6 +62,7 @@ export type ConfirmResponse = {
   importBatchId: string;
   created: number;
   skipped: number;
+  deselected?: number;
   errors: Array<{ line: number; message: string }>;
 };
 

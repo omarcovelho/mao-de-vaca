@@ -11,12 +11,17 @@ import { CategoriesService } from '../categories/categories.service';
 import { CategoryResponse } from '../categories/categories.types';
 import { InvoicesService } from '../invoices/invoices.service';
 import { TransactionsService } from '../transactions/transactions.service';
-import { buildDedupKey } from './dedup-key';
+import {
+  assignOccurrences,
+  buildDedupKey,
+  fingerprintBase,
+} from './dedup-key';
 import {
   CategoryMappings,
   CategoryMappingValue,
   DEFAULT_CREATED_CATEGORY_COLOR,
   DEFAULT_CREATED_CATEGORY_ICON,
+  DuplicateWarning,
   ImportModeApi,
   PreviewRow,
 } from './import.types';
@@ -91,6 +96,27 @@ function mappingFor(
   return key === undefined ? undefined : mappings[key];
 }
 
+function parseSelectedLines(raw: string | undefined): number[] {
+  if (raw === undefined || raw === null || !String(raw).trim()) {
+    throw new BadRequestException('Linhas selecionadas são obrigatórias');
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      !Array.isArray(parsed) ||
+      !parsed.every((item) => Number.isInteger(item) && (item as number) > 0)
+    ) {
+      throw new Error('invalid');
+    }
+    return parsed as number[];
+  } catch (error) {
+    if (error instanceof BadRequestException) {
+      throw error;
+    }
+    throw new BadRequestException('Linhas selecionadas inválidas');
+  }
+}
+
 @Injectable()
 export class ImportService {
   constructor(
@@ -163,10 +189,56 @@ export class ImportService {
       error: error.message,
     }));
 
+    const occurrences = assignOccurrences(
+      upload.parsed.transactions,
+      upload.originId,
+    );
+    const baseCounts = new Map<string, number>();
     for (const row of upload.parsed.transactions) {
+      const base = fingerprintBase(
+        upload.originId,
+        row.competenceDate,
+        row.amount,
+        row.description,
+      );
+      baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
+    }
+
+    const keys = upload.parsed.transactions.map((row, index) =>
+      buildDedupKey(
+        upload.originId,
+        row.competenceDate,
+        row.amount,
+        row.description,
+        occurrences[index],
+      ),
+    );
+    const existing = await this.transactionsService.existingDedupKeys(
+      userId,
+      keys,
+    );
+
+    let duplicateWarningCount = 0;
+
+    upload.parsed.transactions.forEach((row, index) => {
       const match = leafByName(leaves, row.category);
       if (!match) {
         unknown.add(row.category.trim() || row.category);
+      }
+      const base = fingerprintBase(
+        upload.originId,
+        row.competenceDate,
+        row.amount,
+        row.description,
+      );
+      let duplicateWarning: DuplicateWarning | null = null;
+      if (existing.has(keys[index])) {
+        duplicateWarning = 'existing';
+      } else if ((baseCounts.get(base) ?? 0) > 1) {
+        duplicateWarning = 'within_file';
+      }
+      if (duplicateWarning) {
+        duplicateWarningCount += 1;
       }
       rows.push({
         line: row.line,
@@ -177,8 +249,9 @@ export class ImportService {
         type: row.type,
         category: row.category,
         categoryId: match?.id ?? null,
+        duplicateWarning,
       });
-    }
+    });
 
     rows.sort((a, b) => a.line - b.line);
 
@@ -195,6 +268,7 @@ export class ImportService {
         validCount: upload.parsed.transactions.length,
         errorCount: upload.parsed.errors.length,
         unknownCategoryCount: unknown.size,
+        duplicateWarningCount,
       },
     };
   }
@@ -208,17 +282,24 @@ export class ImportService {
       invoiceId?: string;
       parserId?: string;
       categoryMappings?: string;
+      selectedLines?: string;
     },
     file: UploadedCsv | undefined,
   ) {
     const upload = await this.parseUpload(userId, fields, file);
+    const selectedLines = parseSelectedLines(fields.selectedLines);
+    const selectedSet = new Set(selectedLines);
     const mappings = parseCategoryMappings(fields.categoryMappings);
     const tree = await this.categoriesService.list(userId, false);
     const leaves = flattenLeaves(tree);
     const categoryIds = new Map<string, string>();
 
     const uniqueCsvNames = [
-      ...new Set(upload.parsed.transactions.map((row) => row.category)),
+      ...new Set(
+        upload.parsed.transactions
+          .filter((row) => selectedSet.has(row.line))
+          .map((row) => row.category),
+      ),
     ];
 
     for (const csvName of uniqueCsvNames) {
@@ -242,12 +323,17 @@ export class ImportService {
       message: error.message,
     }));
 
-    const keys = upload.parsed.transactions.map((row) =>
+    const occurrences = assignOccurrences(
+      upload.parsed.transactions,
+      upload.originId,
+    );
+    const keys = upload.parsed.transactions.map((row, index) =>
       buildDedupKey(
         upload.originId,
         row.competenceDate,
         row.amount,
         row.description,
+        occurrences[index],
       ),
     );
     const existing = await this.transactionsService.existingDedupKeys(
@@ -257,8 +343,13 @@ export class ImportService {
 
     const toCreate: Prisma.TransactionCreateManyInput[] = [];
     let skipped = 0;
+    let deselected = 0;
 
     upload.parsed.transactions.forEach((row, index) => {
+      if (!selectedSet.has(row.line)) {
+        deselected += 1;
+        return;
+      }
       const dedupKey = keys[index];
       if (existing.has(dedupKey)) {
         skipped += 1;
@@ -316,6 +407,7 @@ export class ImportService {
       importBatchId: batch.id,
       created,
       skipped,
+      deselected,
       errors,
     };
   }

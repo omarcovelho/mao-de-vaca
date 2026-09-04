@@ -8,6 +8,8 @@ export type CategoryMappingValue =
 
 export type CategoryMappings = Record<string, CategoryMappingValue>;
 
+export type DuplicateWarning = 'existing' | 'within_file';
+
 export type PreviewRow = {
   line: number;
   competenceDate?: string;
@@ -17,6 +19,7 @@ export type PreviewRow = {
   type?: 'EXPENSE' | 'INCOME' | 'TRANSFER';
   category?: string;
   categoryId?: string | null;
+  duplicateWarning?: DuplicateWarning | null;
   error?: string;
 };
 

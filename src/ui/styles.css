@@ -1233,6 +1233,13 @@ a {
   padding: 0;
 }
 
+.import-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
 .import-preview-row {
   display: flex;
   flex-wrap: nowrap;
@@ -1245,12 +1252,35 @@ a {
   line-height: 1.35;
 }
 
+.import-preview-row--warning {
+  background: color-mix(in srgb, var(--warning, #b45309) 8%, transparent);
+}
+
+.import-preview-row__select {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+  cursor: pointer;
+}
+
+.import-preview-row__select input {
+  flex-shrink: 0;
+  margin: 0.15rem 0 0;
+}
+
 .import-preview-row__text {
   min-width: 0;
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.import-preview-row__warning {
+  color: var(--warning, #b45309);
+  font-weight: 500;
 }
 
 .import-history li {

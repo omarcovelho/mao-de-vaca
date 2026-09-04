@@ -70,6 +70,7 @@ export class ImportsController {
       invoiceId?: string;
       parserId?: string;
       categoryMappings?: string;
+      selectedLines?: string;
     },
   ) {
     return this.importService.confirm(user.userId, body, file);

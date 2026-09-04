@@ -28,6 +28,14 @@ const CSV = `data,descricao,valor,categoria
 2026-01-16,PIX para Nubank,-1000.00,Lazer
 `;
 
+const CSV_LINES = [2, 3, 4];
+
+const DUPLICATE_CSV = `data,descricao,valor,categoria
+2026-01-06,NuTag*RHG9B72,-12.00,Alimentação
+2026-01-06,NuTag*RHG9B72,-5.40,Alimentação
+2026-01-06,NuTag*RHG9B72,-12.00,Alimentação
+`;
+
 describe('Import HTTP', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
@@ -161,6 +169,7 @@ describe('Import HTTP', () => {
       .expect(200);
 
     expect(response.body.unknownCategories).toEqual(['Lazer']);
+    expect(response.body.summary.duplicateWarningCount).toBe(0);
     expect(response.body.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -168,15 +177,18 @@ describe('Import HTTP', () => {
           categoryId: foodId,
           type: 'EXPENSE',
           amount: '-120.50',
+          duplicateWarning: null,
         }),
         expect.objectContaining({
           category: 'Salário',
           categoryId: salaryId,
           type: 'INCOME',
+          duplicateWarning: null,
         }),
         expect.objectContaining({
           category: 'Lazer',
           categoryId: null,
+          duplicateWarning: null,
         }),
       ]),
     );
@@ -193,6 +205,22 @@ describe('Import HTTP', () => {
       .field('accountId', accountId)
       .field('parserId', 'standard')
       .field('categoryMappings', '{}')
+      .field('selectedLines', JSON.stringify(CSV_LINES))
+      .attach('file', Buffer.from(CSV), 'extrato.csv')
+      .expect(400);
+  });
+
+  it('POST /api/imports/confirm rejects missing selectedLines', async () => {
+    await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({ Lazer: { create: { name: 'Lazer' } } }),
+      )
       .attach('file', Buffer.from(CSV), 'extrato.csv')
       .expect(400);
   });
@@ -208,6 +236,7 @@ describe('Import HTTP', () => {
         'categoryMappings',
         JSON.stringify({ Lazer: { create: { name: 'Lazer' } } }),
       )
+      .field('selectedLines', JSON.stringify(CSV_LINES))
       .attach('file', Buffer.from(CSV), 'extrato.csv')
       .expect(200);
 
@@ -215,6 +244,7 @@ describe('Import HTTP', () => {
       id: expect.any(String),
       created: 3,
       skipped: 0,
+      deselected: 0,
       errors: [],
     });
     expect(first.body.importBatchId).toBe(first.body.id);
@@ -251,10 +281,11 @@ describe('Import HTTP', () => {
         'categoryMappings',
         JSON.stringify({ Lazer: { create: { name: 'Lazer' } } }),
       )
+      .field('selectedLines', JSON.stringify(CSV_LINES))
       .attach('file', Buffer.from(CSV), 'extrato.csv')
       .expect(200);
 
-    expect(second.body).toMatchObject({ created: 0, skipped: 3 });
+    expect(second.body).toMatchObject({ created: 0, skipped: 3, deselected: 0 });
     expect(await prisma.transaction.count({ where: { userId } })).toBe(3);
 
     const history = await request(app.getHttpServer())
@@ -268,6 +299,94 @@ describe('Import HTTP', () => {
       skippedCount: 3,
       fileName: 'extrato.csv',
     });
+  });
+
+  it('POST /api/imports/preview marks within_file and existing duplicate warnings', async () => {
+    const previewFirst = await request(app.getHttpServer())
+      .post('/api/imports/preview')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .attach('file', Buffer.from(DUPLICATE_CSV), 'dup.csv')
+      .expect(200);
+
+    expect(previewFirst.body.summary.duplicateWarningCount).toBe(2);
+    const withinRows = previewFirst.body.rows.filter(
+      (row: { duplicateWarning?: string | null }) =>
+        row.duplicateWarning === 'within_file',
+    );
+    expect(withinRows).toHaveLength(2);
+    expect(withinRows.map((row: { amount: string }) => row.amount)).toEqual([
+      '-12.00',
+      '-12.00',
+    ]);
+
+    await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field('categoryMappings', '{}')
+      .field('selectedLines', JSON.stringify([2, 3, 4]))
+      .attach('file', Buffer.from(DUPLICATE_CSV), 'dup.csv')
+      .expect(200);
+
+    const previewSecond = await request(app.getHttpServer())
+      .post('/api/imports/preview')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .attach('file', Buffer.from(DUPLICATE_CSV), 'dup.csv')
+      .expect(200);
+
+    expect(previewSecond.body.summary.duplicateWarningCount).toBe(3);
+    expect(
+      previewSecond.body.rows.filter(
+        (row: { duplicateWarning?: string | null }) =>
+          row.duplicateWarning === 'existing',
+      ),
+    ).toHaveLength(3);
+  });
+
+  it('POST /api/imports/confirm persists identical rows and honors selectedLines', async () => {
+    const both = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field('categoryMappings', '{}')
+      .field('selectedLines', JSON.stringify([2, 4]))
+      .attach('file', Buffer.from(DUPLICATE_CSV), 'dup.csv')
+      .expect(200);
+
+    expect(both.body).toMatchObject({
+      created: 2,
+      skipped: 0,
+      deselected: 1,
+    });
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(2);
+
+    const reimport = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field('categoryMappings', '{}')
+      .field('selectedLines', JSON.stringify([2, 4]))
+      .attach('file', Buffer.from(DUPLICATE_CSV), 'dup.csv')
+      .expect(200);
+
+    expect(reimport.body).toMatchObject({
+      created: 0,
+      skipped: 2,
+      deselected: 1,
+    });
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(2);
   });
 
   it('POST /api/imports/preview rejects missing account', async () => {
@@ -340,6 +459,7 @@ describe('Import HTTP', () => {
         'categoryMappings',
         JSON.stringify({ '(sem categoria)': foodId }),
       )
+      .field('selectedLines', JSON.stringify([2, 3]))
       .attach('file', Buffer.from(invoiceCsv), 'fatura.csv')
       .expect(200);
 
@@ -404,6 +524,7 @@ describe('Import HTTP', () => {
         'categoryMappings',
         JSON.stringify({ Alimentação: { create: { name: 'Alimentação' } } }),
       )
+      .field('selectedLines', JSON.stringify([2]))
       .attach('file', Buffer.from(csv), 'extrato.csv')
       .expect(400);
 
@@ -419,6 +540,7 @@ describe('Import HTTP', () => {
         'categoryMappings',
         JSON.stringify({ Alimentação: child.id }),
       )
+      .field('selectedLines', JSON.stringify([2]))
       .attach('file', Buffer.from(csv), 'extrato.csv')
       .expect(200);
 
