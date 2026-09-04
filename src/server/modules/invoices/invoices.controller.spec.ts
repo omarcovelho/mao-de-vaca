@@ -544,4 +544,44 @@ describe('Invoices HTTP', () => {
     expect(res.body.payments).toEqual([]);
     expect(res.body.status).toBe('open');
   });
+
+  it('PATCH /api/invoices/:id updates dueDate', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-50]);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/invoices/${invoice.id}`)
+      .set('Cookie', authCookie)
+      .send({ dueDate: '2026-09-25' })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      id: invoice.id,
+      dueDate: '2026-09-25',
+      balance: -50,
+      status: 'open',
+    });
+
+    const stored = await prisma.invoice.findUniqueOrThrow({
+      where: { id: invoice.id },
+    });
+    expect(stored.dueDate.toISOString().slice(0, 10)).toBe('2026-09-25');
+  });
+
+  it('PATCH /api/invoices/:id rejects invalid dueDate', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-50]);
+
+    await request(app.getHttpServer())
+      .patch(`/api/invoices/${invoice.id}`)
+      .set('Cookie', authCookie)
+      .send({ dueDate: '10/09/2026' })
+      .expect(400);
+  });
+
+  it('PATCH /api/invoices/:id returns 404 for unknown invoice', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/invoices/does-not-exist')
+      .set('Cookie', authCookie)
+      .send({ dueDate: '2026-09-25' })
+      .expect(404);
+  });
 });

@@ -5,6 +5,10 @@ export type CreateInvoiceDto = {
   dueDate?: string;
 };
 
+export type UpdateInvoiceDto = {
+  dueDate?: string;
+};
+
 export type LinkInvoicePaymentsDto = {
   transactionIds?: string[];
 };

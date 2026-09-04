@@ -438,6 +438,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 - `GET /api/invoices` — lista com saldo/status derivados
 - `GET /api/invoices/:id` — detalhe + compras + pagamentos vinculados
+- `PATCH /api/invoices/:id` — atualizar `dueDate` (YYYY-MM-DD)
 - `POST /api/invoices/:id/payments` — vincular pagamento(s)
 
 ### Compra-pai
@@ -548,3 +549,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-03 | V4 faturas: `Invoice`, import modo fatura, `cashDate` nullable, saldo = sum(imported), sinais iguais ao extrato (+ = estorno/`EXPENSE`) |
 | 2026-09-03 | Import: preview com avisos de duplicata, seleção por linha (`selectedLines`), dedupKey com occurrence |
 | 2026-09-03 | Import: `DELETE /api/imports/:id` hard delete com guards (TRANSFER, fatura paid) |
+| 2026-09-03 | Faturas: `PATCH /api/invoices/:id` para editar `dueDate` |

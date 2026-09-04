@@ -164,4 +164,52 @@ describe('Invoice payment link UI', () => {
     expect(screen.getByText('Pagamentos vinculados')).toBeInTheDocument();
     expect(onLoaded).toHaveBeenCalled();
   });
+
+  it('edits invoice due date', async () => {
+    const user = userEvent.setup();
+    const detail = {
+      id: 'inv-2',
+      cardId: 'card-1',
+      referenceMonth: '2026-08-01',
+      dueDate: '2026-09-10',
+      balance: -100,
+      status: 'open',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      card: {
+        id: 'card-1',
+        label: 'Nubank Roxinho',
+        bank: { id: 'b1', name: 'Nubank' },
+      },
+      transactions: [],
+      payments: [],
+    };
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url === '/api/invoices/inv-2' && method === 'GET') {
+        return Response.json(detail);
+      }
+      if (url === '/api/invoices/inv-2' && method === 'PATCH') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { dueDate: string };
+        expect(body.dueDate).toBe('2026-09-20');
+        return Response.json({ ...detail, dueDate: '2026-09-20' });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    render(
+      <InvoiceDetailPanel invoiceId="inv-2" onBack={() => undefined} />,
+    );
+
+    expect(await screen.findByText(/Vence 10\/09\/2026/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Editar' }));
+
+    const input = screen.getByLabelText('Vencimento');
+    await user.clear(input);
+    await user.type(input, '2026-09-20');
+    await user.click(screen.getByRole('button', { name: 'Salvar vencimento' }));
+
+    expect(await screen.findByText(/Vence 20\/09\/2026/)).toBeInTheDocument();
+  });
 });
