@@ -41,6 +41,7 @@ describe('Reports HTTP', () => {
   let batchId: string;
 
   async function cleanup() {
+    await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
     await prisma.category.deleteMany({ where: { userId } });
@@ -50,7 +51,7 @@ describe('Reports HTTP', () => {
   async function seedTransaction(input: {
     description: string;
     amount: string;
-    type: 'EXPENSE' | 'INCOME' | 'TRANSFER';
+    type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
     categoryId: string;
     competenceDate: string;
     cashDate?: string;
@@ -219,6 +220,14 @@ describe('Reports HTTP', () => {
         categoryId: transferCategoryId,
         competenceDate: '2026-03-08',
         dedupKey: 'sum-transfer',
+      }),
+      seedTransaction({
+        description: 'Pagamento fatura',
+        amount: '-800.00',
+        type: 'INVOICE_PAYMENT',
+        categoryId: transferCategoryId,
+        competenceDate: '2026-03-09',
+        dedupKey: 'sum-invoice-payment',
       }),
       seedTransaction({
         description: 'Desativado',

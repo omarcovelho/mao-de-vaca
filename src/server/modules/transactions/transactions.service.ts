@@ -38,6 +38,7 @@ type TransactionRow = Transaction & {
     label: string;
     bank: { id: string; name: string };
   } | null;
+  invoicePaymentLink: { invoiceId: string } | null;
 };
 
 const originInclude = {
@@ -117,6 +118,7 @@ export class TransactionsService {
         },
         account: originInclude,
         card: originInclude,
+        invoicePaymentLink: { select: { invoiceId: true } },
       },
       orderBy: [{ [dateField]: 'desc' }, { createdAt: 'desc' }],
     });
@@ -178,6 +180,7 @@ export class TransactionsService {
         },
         account: originInclude,
         card: originInclude,
+        invoicePaymentLink: { select: { invoiceId: true } },
       },
     });
 
@@ -270,7 +273,7 @@ export class TransactionsService {
             },
           }
         : null,
-      invoiceId: row.invoiceId,
+      invoiceId: row.invoiceId ?? row.invoicePaymentLink?.invoiceId ?? null,
     };
   }
 }

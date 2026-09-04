@@ -184,7 +184,7 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 
 **Depende de:** V2 (conta cadastrada), **V2.5 (módulo de categorias)**.
 
-**Notas:** Regime de caixa = competência para lançamentos de conta neste épico. Parser padrão: CSV `data,descricao,valor,categoria` (ver `docs/fixtures/extrato-conta-padrao.csv`). Valor negativo → despesa; positivo → receita. Transferência entre contas em dois arquivos permanece como dois lançamentos até vínculo manual (backlog).
+**Notas:** Regime de caixa = competência para lançamentos de conta neste épico. Parser padrão: CSV `data,descricao,valor,categoria` (ver `docs/fixtures/extrato-conta-corrente.csv`). Valor negativo → despesa; positivo → receita. Transferência entre contas em dois arquivos permanece como dois lançamentos até vínculo manual (backlog).
 
 ---
 

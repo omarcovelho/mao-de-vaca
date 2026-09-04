@@ -310,7 +310,6 @@ export function TransactionsPage() {
       ) : (
         <ul className="tx-rows">
           {items.map((item) => {
-            const isExpense = item.type === 'EXPENSE';
             const leafOptions = leaves.filter((leaf) => {
               if (item.type === 'EXPENSE') {
                 return leaf.kind === 'EXPENSE';
@@ -368,6 +367,17 @@ export function TransactionsPage() {
                     <span className="tx-row__account-label">{item.card.label}</span>
                     <span className="bank-pill">{item.card.bank.name}</span>
                   </span>
+                ) : item.account &&
+                  item.type === 'INVOICE_PAYMENT' &&
+                  item.invoiceId ? (
+                  <Link
+                    to={`/cartoes?invoiceId=${item.invoiceId}`}
+                    className="tx-row__account tx-row__account--link"
+                  >
+                    <AccountOriginIcon className="tx-row__origin-icon" />
+                    <span className="tx-row__account-label">{item.account.label}</span>
+                    <span className="bank-pill">{item.account.bank.name}</span>
+                  </Link>
                 ) : item.account ? (
                   <span className="tx-row__account">
                     <AccountOriginIcon className="tx-row__origin-icon" />
@@ -379,7 +389,9 @@ export function TransactionsPage() {
                 )}
                 <span
                   className={`tx-row__amount${
-                    isExpense ? ' tx-row__amount--expense' : ''
+                    item.amount < 0 || item.type === 'EXPENSE'
+                      ? ' tx-row__amount--expense'
+                      : ''
                   }`}
                 >
                   {formatAmount(item.amount, item.type)}

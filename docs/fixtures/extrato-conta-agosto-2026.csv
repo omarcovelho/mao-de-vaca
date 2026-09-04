@@ -1,9 +1,0 @@
-data,descricao,valor,categoria,tipo
-2026-08-01,Salário agosto,"8.500,00",Salário,
-2026-08-05,Aluguel apartamento,"-2.200,00",Aluguel,
-2026-08-08,Supermercado Extra,"-186,40",Supermercado,
-2026-08-12,PIX para poupança,"-500,00",Transferências entre contas,transferencia
-2026-08-17,Pagamento fatura Nubank,"-450,00",Pagamento de fatura,transferencia
-2026-08-20,Farmácia Droga Raia,"-67,30",Farmácia/drogaria,
-2026-08-25,iFood jantar,"-54,90",iFood,
-2026-08-28,Barbeiro,"-45,00",Barbeiro,

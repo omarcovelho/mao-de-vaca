@@ -82,6 +82,17 @@ export function CardsPage() {
 
   const handleInvoiceLoaded = useCallback((detail: InvoiceDetail) => {
     setSelectedCardId(detail.cardId);
+    setInvoices((current) =>
+      current.map((invoice) =>
+        invoice.id === detail.id
+          ? {
+              ...invoice,
+              balance: detail.balance,
+              status: detail.status,
+            }
+          : invoice,
+      ),
+    );
   }, []);
 
   function openInvoiceDetail(invoiceId: string) {

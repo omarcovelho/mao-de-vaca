@@ -19,7 +19,7 @@ export type InvoiceTransaction = {
   id: string;
   description: string;
   amount: number;
-  type: 'EXPENSE' | 'INCOME' | 'TRANSFER';
+  type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
   competenceDate: string;
   cashDate: string | null;
   active: boolean;
@@ -32,6 +32,20 @@ export type InvoiceTransaction = {
   };
 };
 
+export type InvoicePayment = {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'INVOICE_PAYMENT';
+  competenceDate: string;
+  cashDate: string | null;
+  account: {
+    id: string;
+    label: string;
+    bank: { id: string; name: string };
+  };
+};
+
 export type InvoiceDetail = Invoice & {
   card: {
     id: string;
@@ -39,4 +53,5 @@ export type InvoiceDetail = Invoice & {
     bank: { id: string; name: string };
   };
   transactions: InvoiceTransaction[];
+  payments: InvoicePayment[];
 };
