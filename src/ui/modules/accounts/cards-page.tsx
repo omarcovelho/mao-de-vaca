@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ConfirmModal } from '../../components/confirm-modal';
 import { PageHeader } from '../../components/page-header';
+import { useToast } from '../../components/toast';
 import * as accountsApi from './api';
 import { BankFields } from './bank-fields';
 import { OnboardingContinue } from './onboarding-continue';
@@ -59,6 +61,7 @@ function statusLabel(status: Invoice['status']): string {
 }
 
 export function CardsPage() {
+  const toast = useToast();
   const { reload, isOnboardingComplete, startOnboarding } = useSetupStatus();
   const isOnboarding = !isOnboardingComplete;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -79,6 +82,8 @@ export function CardsPage() {
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [originsRefreshKey, setOriginsRefreshKey] = useState(0);
+  const [deactivateId, setDeactivateId] = useState<string | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   const handleInvoiceLoaded = useCallback((detail: InvoiceDetail) => {
     setSelectedCardId(detail.cardId);
@@ -210,13 +215,23 @@ export function CardsPage() {
     }
   }
 
-  async function handleDeactivate(id: string) {
+  async function runDeactivate() {
+    if (!deactivateId) {
+      return;
+    }
+    setDeactivating(true);
     setError(null);
     try {
-      await accountsApi.deactivateCard(id);
+      await accountsApi.deactivateCard(deactivateId);
+      setDeactivateId(null);
       await load();
+      toast.success('Cartão desativado.');
     } catch {
-      setError('Não foi possível desativar o cartão.');
+      const message = 'Não foi possível desativar o cartão.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDeactivating(false);
     }
   }
 
@@ -393,7 +408,7 @@ export function CardsPage() {
                     <button
                       type="button"
                       className="btn btn--ghost"
-                      onClick={() => void handleDeactivate(selectedCard.id)}
+                      onClick={() => setDeactivateId(selectedCard.id)}
                     >
                       Desativar cartão
                     </button>
@@ -481,6 +496,25 @@ export function CardsPage() {
           ) : null}
         </>
       )}
+
+      <ConfirmModal
+        open={deactivateId !== null}
+        title="Desativar cartão"
+        description={
+          deactivateId
+            ? `Desativar “${items.find((item) => item.id === deactivateId)?.label ?? 'este cartão'}”? Ele deixa de aparecer nas origens ativas.`
+            : null
+        }
+        confirmLabel="Desativar"
+        variant="danger"
+        busy={deactivating}
+        onCancel={() => {
+          if (!deactivating) {
+            setDeactivateId(null);
+          }
+        }}
+        onConfirm={() => void runDeactivate()}
+      />
     </section>
   );
 }

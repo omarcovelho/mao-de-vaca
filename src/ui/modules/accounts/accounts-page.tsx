@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { ConfirmModal } from '../../components/confirm-modal';
 import { PageHeader } from '../../components/page-header';
+import { useToast } from '../../components/toast';
 import * as accountsApi from './api';
 import { BankFields } from './bank-fields';
 import { OnboardingContinue } from './onboarding-continue';
@@ -10,6 +12,7 @@ import { useSetupStatus } from './setup-status-context';
 import type { Origin } from './types';
 
 export function AccountsPage() {
+  const toast = useToast();
   const { reload, isOnboardingComplete, startOnboarding } = useSetupStatus();
   const isOnboarding = !isOnboardingComplete;
   const [items, setItems] = useState<Origin[]>([]);
@@ -21,6 +24,8 @@ export function AccountsPage() {
   const [showForm, setShowForm] = useState(isOnboarding);
   const [step, setStep] = useState<'form' | 'success'>('form');
   const [originsRefreshKey, setOriginsRefreshKey] = useState(0);
+  const [deactivateId, setDeactivateId] = useState<string | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -75,13 +80,23 @@ export function AccountsPage() {
     }
   }
 
-  async function handleDeactivate(id: string) {
+  async function runDeactivate() {
+    if (!deactivateId) {
+      return;
+    }
+    setDeactivating(true);
     setError(null);
     try {
-      await accountsApi.deactivateAccount(id);
+      await accountsApi.deactivateAccount(deactivateId);
+      setDeactivateId(null);
       await load();
+      toast.success('Conta desativada.');
     } catch {
-      setError('Não foi possível desativar a conta.');
+      const message = 'Não foi possível desativar a conta.';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setDeactivating(false);
     }
   }
 
@@ -212,7 +227,7 @@ export function AccountsPage() {
                 <button
                   type="button"
                   className="btn btn--ghost"
-                  onClick={() => void handleDeactivate(item.id)}
+                  onClick={() => setDeactivateId(item.id)}
                 >
                   Desativar
                 </button>
@@ -221,6 +236,25 @@ export function AccountsPage() {
           ))}
         </ul>
       )}
+
+      <ConfirmModal
+        open={deactivateId !== null}
+        title="Desativar conta"
+        description={
+          deactivateId
+            ? `Desativar “${items.find((item) => item.id === deactivateId)?.label ?? 'esta conta'}”? Ela deixa de aparecer nas origens ativas.`
+            : null
+        }
+        confirmLabel="Desativar"
+        variant="danger"
+        busy={deactivating}
+        onCancel={() => {
+          if (!deactivating) {
+            setDeactivateId(null);
+          }
+        }}
+        onConfirm={() => void runDeactivate()}
+      />
     </section>
   );
 }

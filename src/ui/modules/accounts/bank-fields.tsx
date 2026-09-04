@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { SearchableSelect } from '../../components/searchable-select';
 import * as accountsApi from './api';
 import type { Bank } from './types';
 
@@ -18,6 +19,11 @@ export function BankFields({
   const [creatingBank, setCreatingBank] = useState(false);
   const [loadingBanks, setLoadingBanks] = useState(true);
   const [showNewBank, setShowNewBank] = useState(false);
+
+  const bankOptions = useMemo(
+    () => banks.map((bank) => ({ value: bank.id, label: bank.name })),
+    [banks],
+  );
 
   async function loadBanks(selectId?: string) {
     setLoadingBanks(true);
@@ -70,23 +76,16 @@ export function BankFields({
     <div className="bank-fields">
       <label>
         Banco
-        <select
-          name="bankId"
+        <SearchableSelect
+          aria-label="Banco"
+          options={bankOptions}
           value={bankId}
-          onChange={(event) => onBankIdChange(event.target.value)}
-          required
+          onChange={onBankIdChange}
           disabled={loadingBanks || banks.length === 0}
-        >
-          {banks.length === 0 ? (
-            <option value="">Nenhum banco cadastrado</option>
-          ) : (
-            banks.map((bank) => (
-              <option key={bank.id} value={bank.id}>
-                {bank.name}
-              </option>
-            ))
-          )}
-        </select>
+          placeholder={
+            banks.length === 0 ? 'Nenhum banco cadastrado' : 'Selecione…'
+          }
+        />
       </label>
 
       {showNewBank ? (

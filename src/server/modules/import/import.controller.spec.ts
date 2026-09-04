@@ -298,6 +298,9 @@ describe('Import HTTP', () => {
       createdCount: 0,
       skippedCount: 3,
       fileName: 'extrato.csv',
+      accountLabel: 'Nubank CC',
+      bankName: 'Nubank',
+      importMode: 'transactions',
     });
   });
 
@@ -465,6 +468,18 @@ describe('Import HTTP', () => {
 
     expect(confirm.body).toMatchObject({ created: 2, skipped: 0 });
 
+    const history = await request(app.getHttpServer())
+      .get('/api/imports')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(history.body[0]).toMatchObject({
+      importMode: 'invoice',
+      fileName: 'fatura.csv',
+      cardLabel: 'Nubank Roxinho',
+      bankName: 'Nubank',
+    });
+
     const rows = await prisma.transaction.findMany({
       where: { userId, invoiceId: invoice.id },
       orderBy: { competenceDate: 'asc' },
@@ -549,6 +564,43 @@ describe('Import HTTP', () => {
       where: { userId, description: 'Compra' },
     });
     expect(row?.categoryId).toBe(child.id);
+  });
+
+  it('POST /api/imports/confirm creates category under optional parentId', async () => {
+    const csv = `data,descricao,valor,categoria
+2026-03-01,Cinema,-40.00,Lazer
+`;
+
+    const confirm = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({
+          Lazer: { create: { name: 'Lazer', parentId: foodId } },
+        }),
+      )
+      .field('selectedLines', JSON.stringify([2]))
+      .attach('file', Buffer.from(csv), 'extrato.csv')
+      .expect(200);
+
+    expect(confirm.body.created).toBe(1);
+
+    const created = await prisma.category.findFirst({
+      where: { userId, name: 'Lazer' },
+    });
+    expect(created).toMatchObject({
+      parentId: foodId,
+      kind: 'EXPENSE',
+    });
+
+    const row = await prisma.transaction.findFirst({
+      where: { userId, description: 'Cinema' },
+    });
+    expect(row?.categoryId).toBe(created?.id);
   });
 
   it('DELETE /api/imports/:id hard-deletes transactions and batch', async () => {

@@ -13,7 +13,7 @@ description: >-
 When the user asks to **implement an epic** (or equivalent: “implementar o épico”, “começar o V3”, “fazer o slice V2.5”, etc.):
 
 1. **Create and check out a new branch first**
-2. **Do not write application code or start TDD until the branch exists and you are on it**
+2. **Do not write application code or start implementation/tests until the branch exists and you are on it**
 
 ## Workflow
 

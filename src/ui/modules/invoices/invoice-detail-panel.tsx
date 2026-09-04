@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ConfirmModal } from '../../components/confirm-modal';
+import { SearchableSelect } from '../../components/searchable-select';
+import { useToast } from '../../components/toast';
 import { listAccounts } from '../accounts/api';
 import type { Origin } from '../accounts/types';
 import { listTransactions } from '../transactions/api';
@@ -81,6 +84,7 @@ export function InvoiceDetailPanel({
   onBack,
   onLoaded,
 }: InvoiceDetailPanelProps) {
+  const toast = useToast();
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,10 +96,20 @@ export function InvoiceDetailPanel({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [confirmLinkOpen, setConfirmLinkOpen] = useState(false);
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateDraft, setDueDateDraft] = useState('');
   const [dueDateBusy, setDueDateBusy] = useState(false);
   const [dueDateError, setDueDateError] = useState<string | null>(null);
+
+  const accountOptions = useMemo(
+    () =>
+      accounts.map((account) => ({
+        value: account.id,
+        label: `${account.label} (${account.bank.name})`,
+      })),
+    [accounts],
+  );
 
   const linkedIds = useMemo(
     () => new Set((detail?.payments ?? []).map((payment) => payment.id)),
@@ -230,12 +244,15 @@ export function InvoiceDetailPanel({
       onLoaded?.(next);
       setLinking(false);
       setSelectedIds([]);
+      setConfirmLinkOpen(false);
+      toast.success('Pagamento vinculado à fatura.');
     } catch (err) {
-      setLinkError(
+      const message =
         err instanceof Error
           ? err.message
-          : 'Não foi possível vincular o pagamento.',
-      );
+          : 'Não foi possível vincular o pagamento.';
+      setLinkError(message);
+      toast.error(message);
     } finally {
       setLinkBusy(false);
     }
@@ -378,21 +395,16 @@ export function InvoiceDetailPanel({
           </p>
           <div className="form-stack">
             <span className="form-label">Conta</span>
-            <select
+            <SearchableSelect
+              aria-label="Conta"
+              options={accountOptions}
               value={accountId}
-              onChange={(event) => setAccountId(event.target.value)}
+              onChange={setAccountId}
               disabled={accounts.length === 0 || linkBusy}
-            >
-              {accounts.length === 0 ? (
-                <option value="">Nenhuma conta ativa</option>
-              ) : (
-                accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.label} ({account.bank.name})
-                  </option>
-                ))
-              )}
-            </select>
+              placeholder={
+                accounts.length === 0 ? 'Nenhuma conta ativa' : 'Selecione…'
+              }
+            />
           </div>
 
           {candidatesLoading ? (
@@ -446,9 +458,7 @@ export function InvoiceDetailPanel({
               type="button"
               className="btn btn--primary"
               disabled={linkBusy || selectedIds.length === 0}
-              onClick={() => {
-                void handleConfirmLink();
-              }}
+              onClick={() => setConfirmLinkOpen(true)}
             >
               {linkBusy ? 'Vinculando…' : 'Confirmar vínculo'}
             </button>
@@ -505,6 +515,20 @@ export function InvoiceDetailPanel({
           ))}
         </ul>
       )}
+
+      <ConfirmModal
+        open={confirmLinkOpen}
+        title="Vincular pagamento"
+        description={`Vincular ${selectedIds.length} débito(s) a esta fatura? O lançamento passa a ser tratado como pagamento de fatura.`}
+        confirmLabel="Vincular"
+        busy={linkBusy}
+        onCancel={() => {
+          if (!linkBusy) {
+            setConfirmLinkOpen(false);
+          }
+        }}
+        onConfirm={() => void handleConfirmLink()}
+      />
     </section>
   );
 }

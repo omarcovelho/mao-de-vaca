@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShell } from '../../components/app-shell';
 import { RequiresOrigins } from '../../components/requires-origins';
+import { ToastProvider } from '../../components/toast';
 import { AuthProvider } from '../auth/auth-context';
 import { ProtectedRoute } from '../auth/protected-route';
 import { SetupStatusProvider } from '../accounts/setup-status-context';
@@ -16,23 +17,25 @@ import { ReportsPage } from './reports-page';
 function renderReportsApp(initialPath = '/relatorios') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <AuthProvider>
-        <SetupStatusProvider>
-          <RegimeProvider>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route element={<RequiresOrigins />}>
-                    <Route path="/relatorios" element={<ReportsPage />} />
-                    <Route path="/lancamentos" element={<TransactionsPage />} />
+      <ToastProvider>
+        <AuthProvider>
+          <SetupStatusProvider>
+            <RegimeProvider>
+              <Routes>
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route element={<RequiresOrigins />}>
+                      <Route path="/relatorios" element={<ReportsPage />} />
+                      <Route path="/lancamentos" element={<TransactionsPage />} />
+                    </Route>
                   </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </RegimeProvider>
-        </SetupStatusProvider>
-      </AuthProvider>
+              </Routes>
+            </RegimeProvider>
+          </SetupStatusProvider>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -565,8 +568,9 @@ describe('Reports UI flow', () => {
     ).toBeInTheDocument();
 
     await waitFor(() => {
-      const categorySelect = screen.getByLabelText('Categoria') as HTMLSelectElement;
-      expect(categorySelect.value).toBe('food');
+      expect(
+        screen.getByRole('combobox', { name: 'Filtro de categoria' }),
+      ).toHaveTextContent('Alimentação');
     });
     expect(screen.getByLabelText('Selecionar mês')).toHaveValue(month);
   });

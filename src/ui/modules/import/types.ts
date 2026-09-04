@@ -75,6 +75,7 @@ export type ImportHistoryItem = {
   accountLabel: string | null;
   cardId?: string | null;
   cardLabel?: string | null;
+  bankName?: string | null;
   invoiceId?: string | null;
   invoiceReferenceMonth?: string | null;
   createdCount: number;
@@ -85,4 +86,4 @@ export type ImportHistoryItem = {
 
 export type CategoryMappingValue =
   | string
-  | { create: { name: string } };
+  | { create: { name: string; parentId?: string | null } };

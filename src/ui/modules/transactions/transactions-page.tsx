@@ -1,33 +1,28 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import {
+  flattenCategoryLeaves,
+  type CategoryLeafOption,
+} from '../../components/category-leaves';
+import { ConfirmModal } from '../../components/confirm-modal';
+import { MapExistingCategoryModal } from '../../components/map-existing-category-modal';
 import { PageHeader } from '../../components/page-header';
 import {
   AccountOriginIcon,
   CardOriginIcon,
 } from '../../components/origin-icon';
 import { RegimeToggle } from '../../components/regime-toggle';
+import { SearchableSelect } from '../../components/searchable-select';
+import { useToast } from '../../components/toast';
 import { listAccounts } from '../accounts/api';
 import type { Origin } from '../accounts/types';
 import { listCategories } from '../categories/api';
-import type { Category } from '../categories/types';
 import * as transactionsApi from './api';
 import { formatMonthLabel, monthBounds, shiftMonth, toMonthKey } from './month';
 import { useRegime } from './regime-context';
 import type { TransactionItem } from './types';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
-
-function flattenLeaves(nodes: Category[]): Category[] {
-  const leaves: Category[] = [];
-  for (const node of nodes) {
-    if (node.children && node.children.length > 0) {
-      leaves.push(...flattenLeaves(node.children));
-    } else if (node.isLeaf) {
-      leaves.push(node);
-    }
-  }
-  return leaves;
-}
 
 function formatAmount(amount: number, type: TransactionItem['type']): string {
   const signed =
@@ -55,6 +50,7 @@ function initialMonth(searchParams: URLSearchParams): string {
 }
 
 export function TransactionsPage() {
+  const toast = useToast();
   const { regime, setRegime } = useRegime();
   const [searchParams] = useSearchParams();
   const [month, setMonth] = useState(() => initialMonth(searchParams));
@@ -66,11 +62,17 @@ export function TransactionsPage() {
   const [accountId, setAccountId] = useState('');
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [accounts, setAccounts] = useState<Origin[]>([]);
-  const [leaves, setLeaves] = useState<Category[]>([]);
+  const [leaves, setLeaves] = useState<CategoryLeafOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [categoryEdit, setCategoryEdit] = useState<{
+    id: string;
+    description: string;
+    type: TransactionItem['type'];
+    categoryId: string;
+  } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deactivateId, setDeactivateId] = useState<string | null>(null);
 
   useEffect(() => {
     const nextMonth = searchParams.get('month');
@@ -104,7 +106,7 @@ export function TransactionsPage() {
           return;
         }
         setAccounts(accountList);
-        setLeaves(flattenLeaves(tree));
+        setLeaves(flattenCategoryLeaves(tree));
       } catch {
         if (!cancelled) {
           setError('Não foi possível carregar filtros.');
@@ -148,6 +150,20 @@ export function TransactionsPage() {
     };
   }, [regime, period.from, period.to, categoryId, accountId]);
 
+  const categoryFilterOptions = useMemo(
+    () => leaves.map((leaf) => ({ value: leaf.value, label: leaf.label })),
+    [leaves],
+  );
+
+  const accountFilterOptions = useMemo(
+    () =>
+      accounts.map((account) => ({
+        value: account.id,
+        label: account.label,
+      })),
+    [accounts],
+  );
+
   async function handleCategoryChange(id: string, nextCategoryId: string) {
     setBusyId(id);
     setError(null);
@@ -166,26 +182,35 @@ export function TransactionsPage() {
             : item,
         ),
       );
-      setEditingId(null);
+      setCategoryEdit(null);
+      toast.success('Categoria atualizada.');
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Falha ao alterar categoria',
-      );
+      const message =
+        err instanceof Error ? err.message : 'Falha ao alterar categoria';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusyId(null);
     }
   }
 
-  async function handleDeactivate(id: string) {
+  async function runDeactivate() {
+    if (!deactivateId) {
+      return;
+    }
+    const id = deactivateId;
     setBusyId(id);
     setError(null);
     try {
       await transactionsApi.updateTransaction(id, { active: false });
       setItems((current) => current.filter((item) => item.id !== id));
+      setDeactivateId(null);
+      toast.success('Lançamento desativado.');
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Falha ao desativar lançamento',
-      );
+      const message =
+        err instanceof Error ? err.message : 'Falha ao desativar lançamento';
+      setError(message);
+      toast.error(message);
     } finally {
       setBusyId(null);
     }
@@ -201,6 +226,25 @@ export function TransactionsPage() {
     setCustomFrom('');
     setCustomTo('');
   }
+
+  const deactivateTarget = items.find((item) => item.id === deactivateId);
+
+  const categoryEditOptions = useMemo(() => {
+    if (!categoryEdit) {
+      return [];
+    }
+    return leaves
+      .filter((leaf) => {
+        if (categoryEdit.type === 'EXPENSE') {
+          return leaf.kind === 'EXPENSE';
+        }
+        if (categoryEdit.type === 'INCOME') {
+          return leaf.kind === 'INCOME';
+        }
+        return true;
+      })
+      .map((leaf) => ({ value: leaf.value, label: leaf.label }));
+  }, [categoryEdit, leaves]);
 
   return (
     <section className="page">
@@ -243,31 +287,25 @@ export function TransactionsPage() {
         <div className="form-stack filters-panel__grid">
           <label>
             Categoria
-            <select
+            <SearchableSelect
+              aria-label="Filtro de categoria"
+              options={categoryFilterOptions}
               value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-            >
-              <option value="">Todas</option>
-              {leaves.map((leaf) => (
-                <option key={leaf.id} value={leaf.id}>
-                  {leaf.name}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryId}
+              allowEmpty
+              emptyLabel="Todas"
+            />
           </label>
           <label>
             Conta
-            <select
+            <SearchableSelect
+              aria-label="Filtro de conta"
+              options={accountFilterOptions}
               value={accountId}
-              onChange={(event) => setAccountId(event.target.value)}
-            >
-              <option value="">Todas</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.label}
-                </option>
-              ))}
-            </select>
+              onChange={setAccountId}
+              allowEmpty
+              emptyLabel="Todas"
+            />
           </label>
           <label>
             Data de
@@ -309,49 +347,27 @@ export function TransactionsPage() {
         <p className="page__empty">Nenhum lançamento neste período.</p>
       ) : (
         <ul className="tx-rows">
-          {items.map((item) => {
-            const leafOptions = leaves.filter((leaf) => {
-              if (item.type === 'EXPENSE') {
-                return leaf.kind === 'EXPENSE';
-              }
-              if (item.type === 'INCOME') {
-                return leaf.kind === 'INCOME';
-              }
-              return true;
-            });
-            return (
+          {items.map((item) => (
               <li key={item.id} className="tx-row">
                 <span className="tx-row__date">{formatDay(item.displayDate)}</span>
                 <span className="tx-row__description" title={item.description}>
                   {item.description}
                 </span>
-                {editingId === item.id ? (
-                  <select
-                    className="tx-row__category-select"
-                    aria-label={`Categoria de ${item.description}`}
-                    value={item.category.id}
-                    disabled={busyId === item.id}
-                    onChange={(event) => {
-                      void handleCategoryChange(item.id, event.target.value);
-                    }}
-                    onBlur={() => setEditingId(null)}
-                    autoFocus
-                  >
-                    {leafOptions.map((leaf) => (
-                      <option key={leaf.id} value={leaf.id}>
-                        {leaf.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <button
-                    type="button"
-                    className="tx-row__category linkish"
-                    onClick={() => setEditingId(item.id)}
-                  >
-                    {item.category.name}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="tx-row__category linkish"
+                  disabled={busyId === item.id}
+                  onClick={() =>
+                    setCategoryEdit({
+                      id: item.id,
+                      description: item.description,
+                      type: item.type,
+                      categoryId: item.category.id,
+                    })
+                  }
+                >
+                  {item.category.name}
+                </button>
                 {item.card && item.invoiceId ? (
                   <Link
                     to={`/cartoes?invoiceId=${item.invoiceId}`}
@@ -400,17 +416,65 @@ export function TransactionsPage() {
                   type="button"
                   className="btn btn--ghost btn--compact tx-row__action"
                   disabled={busyId === item.id}
-                  onClick={() => {
-                    void handleDeactivate(item.id);
-                  }}
+                  onClick={() => setDeactivateId(item.id)}
                 >
                   Desativar
                 </button>
               </li>
-            );
-          })}
+            ))}
         </ul>
       )}
+
+      <MapExistingCategoryModal
+        open={categoryEdit !== null}
+        title="Alterar categoria"
+        description={
+          categoryEdit ? (
+            <p className="form-hint" style={{ margin: 0 }}>
+              Escolha a categoria de <strong>{categoryEdit.description}</strong>.
+            </p>
+          ) : null
+        }
+        categoryId={categoryEdit?.categoryId ?? ''}
+        options={categoryEditOptions}
+        confirmLabel="Salvar"
+        busy={busyId === categoryEdit?.id}
+        onCategoryIdChange={(nextCategoryId) => {
+          setCategoryEdit((current) =>
+            current ? { ...current, categoryId: nextCategoryId } : current,
+          );
+        }}
+        onCancel={() => {
+          if (busyId !== categoryEdit?.id) {
+            setCategoryEdit(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!categoryEdit?.categoryId) {
+            return;
+          }
+          void handleCategoryChange(categoryEdit.id, categoryEdit.categoryId);
+        }}
+      />
+
+      <ConfirmModal
+        open={deactivateId !== null}
+        title="Desativar lançamento"
+        description={
+          deactivateTarget
+            ? `Desativar “${deactivateTarget.description}”? O lançamento deixa de aparecer nas listagens.`
+            : null
+        }
+        confirmLabel="Desativar"
+        variant="danger"
+        busy={busyId === deactivateId}
+        onCancel={() => {
+          if (busyId !== deactivateId) {
+            setDeactivateId(null);
+          }
+        }}
+        onConfirm={() => void runDeactivate()}
+      />
     </section>
   );
 }

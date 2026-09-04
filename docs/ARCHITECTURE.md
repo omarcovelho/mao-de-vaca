@@ -351,7 +351,7 @@ sequenceDiagram
 - `GET /api/imports/options` — V3: modos, parsers, contas ativas (faturas/cartões no V4)
 - Preview e confirm são **multipart** (arquivo reenviado no confirm; sem cache de preview)
 - Importação **síncrona** no MVP; sem fila nem SSE
-- `categoryMappings`: `Record<string, categoryId | { create: { name } }>` — chave é o texto do CSV
+- `categoryMappings`: `Record<string, categoryId | { create: { name, parentId? } }>` — chave é o texto do CSV; `parentId` opcional cria a categoria sob um pai (sem pai = raiz)
 - `selectedLines`: JSON array de números de linha do CSV (obrigatório no confirm)
 - `DELETE /api/imports/:id` — hard delete do lote (txs + `ImportBatch`); **não** remove fatura/conta/categoria; `409` se o lote contém `TRANSFER` ou se a fatura vinculada está `paid`; resposta `{ id, deletedTransactions }`
 - Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-corrente.csv`
@@ -470,7 +470,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 | ORM | Prisma | Migrations, tipagem, PostgreSQL — restrito a `server/` |
 | DB | PostgreSQL | PROJECT_DEFINITION §7.1 |
 | Auth | Passport local + JWT em cookie httpOnly | Simples para usuário único MVP |
-| Testes | Jest (`server/`) + Vitest (`ui/`) | TDD nos módulos de domínio, parsers e componentes |
+| Testes | Jest (`server/`) + Vitest (`ui/`) | TDD no `server/`; na UI, testes Vitest após a implementação ([quality-gate.mdc](../.cursor/rules/quality-gate.mdc)) |
 | Orquestração | Docker Compose | App + PostgreSQL |
 
 ### Variáveis de ambiente (produção)

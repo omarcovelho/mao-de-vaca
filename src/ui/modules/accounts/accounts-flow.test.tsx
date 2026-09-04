@@ -6,7 +6,9 @@ import { AuthProvider } from '../auth/auth-context';
 import { LoginPage } from '../auth/login-page';
 import { ProtectedRoute } from '../auth/protected-route';
 import { AppShell } from '../../components/app-shell';
+import { ToastProvider } from '../../components/toast';
 import { RegimeProvider } from '../transactions/regime-context';
+import { chooseSearchableOption } from '../../test/searchable-select-helpers';
 import { AccountsPage } from './accounts-page';
 import { CardsPage } from './cards-page';
 import { HomePage } from './home-page';
@@ -15,21 +17,23 @@ import { SetupStatusProvider } from './setup-status-context';
 function renderApp(initialPath: string) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <AuthProvider>
-        <SetupStatusProvider>
-          <RegimeProvider>
-            <Routes>
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/contas" element={<AccountsPage />} />
-                  <Route path="/cartoes" element={<CardsPage />} />
+      <ToastProvider>
+        <AuthProvider>
+          <SetupStatusProvider>
+            <RegimeProvider>
+              <Routes>
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<AppShell />}>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/contas" element={<AccountsPage />} />
+                    <Route path="/cartoes" element={<CardsPage />} />
+                  </Route>
                 </Route>
-              </Route>
-            </Routes>
-          </RegimeProvider>
-        </SetupStatusProvider>
-      </AuthProvider>
+              </Routes>
+            </RegimeProvider>
+          </SetupStatusProvider>
+        </AuthProvider>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -185,20 +189,22 @@ describe('Accounts UI flow', () => {
 
     render(
       <MemoryRouter initialEntries={['/']}>
-        <AuthProvider>
-          <SetupStatusProvider>
-            <RegimeProvider>
-              <Routes>
-                <Route path="/login" element={<LoginPage />} />
-                <Route element={<ProtectedRoute />}>
-                  <Route element={<AppShell />}>
-                    <Route path="/" element={<HomePage />} />
+        <ToastProvider>
+          <AuthProvider>
+            <SetupStatusProvider>
+              <RegimeProvider>
+                <Routes>
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route element={<ProtectedRoute />}>
+                    <Route element={<AppShell />}>
+                      <Route path="/" element={<HomePage />} />
+                    </Route>
                   </Route>
-                </Route>
-              </Routes>
-            </RegimeProvider>
-          </SetupStatusProvider>
-        </AuthProvider>
+                </Routes>
+              </RegimeProvider>
+            </SetupStatusProvider>
+          </AuthProvider>
+        </ToastProvider>
       </MemoryRouter>,
     );
 
@@ -332,7 +338,7 @@ describe('Accounts UI flow', () => {
     ).not.toBeInTheDocument();
     await screen.findByRole('combobox', { name: 'Banco' });
     await user.type(screen.getByLabelText('Apelido'), 'Nubank CC');
-    await user.selectOptions(screen.getByLabelText('Banco'), 'b1');
+    await chooseSearchableOption(user, 'Banco', 'Nubank');
     await user.click(screen.getByRole('button', { name: 'Adicionar conta' }));
 
     expect(
@@ -417,7 +423,7 @@ describe('Accounts UI flow', () => {
 
     await screen.findByRole('heading', { name: 'Nova conta' });
     await user.type(screen.getByLabelText('Apelido'), 'Nubank CC');
-    await user.selectOptions(screen.getByLabelText('Banco'), 'b1');
+    await chooseSearchableOption(user, 'Banco', 'Nubank');
     await user.click(screen.getByRole('button', { name: 'Adicionar conta' }));
 
     await screen.findByText('Conta cadastrada com sucesso!');
@@ -500,7 +506,7 @@ describe('Accounts UI flow', () => {
     await user.click(screen.getByRole('button', { name: 'Adicionar conta' }));
     await screen.findByRole('heading', { name: 'Nova conta' });
     await user.type(screen.getByLabelText('Apelido'), 'Nubank CC');
-    await user.selectOptions(screen.getByLabelText('Banco'), 'b1');
+    await chooseSearchableOption(user, 'Banco', 'Nubank');
     await user.click(screen.getByRole('button', { name: 'Adicionar conta' }));
 
     await waitFor(() => {
@@ -575,19 +581,17 @@ describe('Accounts UI flow', () => {
     renderApp('/cartoes');
 
     await screen.findByRole('heading', { name: 'Novo cartão' });
-    await screen.findByLabelText('Banco');
+    await screen.findByRole('combobox', { name: 'Banco' });
 
     await user.click(screen.getByRole('button', { name: 'Cadastrar novo banco' }));
     await user.type(screen.getByPlaceholderText('Nome do banco'), 'Bradesco');
     await user.click(screen.getByRole('button', { name: 'Cadastrar banco' }));
 
-    await waitFor(() => {
-      expect(
-        within(screen.getByLabelText('Banco')).getByRole('option', {
-          name: 'Bradesco',
-        }),
-      ).toBeInTheDocument();
+    await waitFor(async () => {
+      await user.click(screen.getByRole('combobox', { name: 'Banco' }));
+      expect(screen.getByRole('option', { name: 'Bradesco' })).toBeInTheDocument();
     });
+    await user.keyboard('{Escape}');
 
     await user.type(screen.getByLabelText('Apelido'), 'Visa Bradesco');
     await user.click(screen.getByRole('button', { name: 'Adicionar cartão' }));
@@ -679,19 +683,17 @@ describe('Accounts UI flow', () => {
     await screen.findByRole('heading', { name: 'Cartões' });
     await user.click(screen.getByRole('button', { name: 'Adicionar cartão' }));
     await screen.findByRole('heading', { name: 'Novo cartão' });
-    await screen.findByLabelText('Banco');
+    await screen.findByRole('combobox', { name: 'Banco' });
 
     await user.click(screen.getByRole('button', { name: 'Cadastrar novo banco' }));
     await user.type(screen.getByPlaceholderText('Nome do banco'), 'Bradesco');
     await user.click(screen.getByRole('button', { name: 'Cadastrar banco' }));
 
-    await waitFor(() => {
-      expect(
-        within(screen.getByLabelText('Banco')).getByRole('option', {
-          name: 'Bradesco',
-        }),
-      ).toBeInTheDocument();
+    await waitFor(async () => {
+      await user.click(screen.getByRole('combobox', { name: 'Banco' }));
+      expect(screen.getByRole('option', { name: 'Bradesco' })).toBeInTheDocument();
     });
+    await user.keyboard('{Escape}');
 
     await user.type(screen.getByLabelText('Apelido'), 'Visa Bradesco');
     await user.click(screen.getByRole('button', { name: 'Adicionar cartão' }));
