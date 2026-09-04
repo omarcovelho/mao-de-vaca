@@ -56,6 +56,16 @@ export async function confirmImport(form: FormData): Promise<ConfirmResponse> {
   return response.json() as Promise<ConfirmResponse>;
 }
 
+export async function deleteImport(
+  id: string,
+): Promise<{ id: string; deletedTransactions: number }> {
+  const response = await jsonFetch(`/api/imports/${id}`, { method: 'DELETE' });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, 'Não foi possível excluir a importação'));
+  }
+  return response.json() as Promise<{ id: string; deletedTransactions: number }>;
+}
+
 async function readApiError(response: Response, fallback: string): Promise<string> {
   try {
     const body = (await response.json()) as { message?: string | string[] };

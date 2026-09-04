@@ -92,6 +92,10 @@ export function InvoiceDetailPanel({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [editingDueDate, setEditingDueDate] = useState(false);
+  const [dueDateDraft, setDueDateDraft] = useState('');
+  const [dueDateBusy, setDueDateBusy] = useState(false);
+  const [dueDateError, setDueDateError] = useState<string | null>(null);
 
   const linkedIds = useMemo(
     () => new Set((detail?.payments ?? []).map((payment) => payment.id)),
@@ -109,6 +113,9 @@ export function InvoiceDetailPanel({
           return;
         }
         setDetail(next);
+        setDueDateDraft(next.dueDate);
+        setEditingDueDate(false);
+        setDueDateError(null);
         onLoaded?.(next);
       } catch (err) {
         if (!cancelled) {
@@ -234,6 +241,32 @@ export function InvoiceDetailPanel({
     }
   }
 
+  async function handleSaveDueDate() {
+    if (!dueDateDraft.trim()) {
+      setDueDateError('Informe a data de vencimento.');
+      return;
+    }
+    setDueDateBusy(true);
+    setDueDateError(null);
+    try {
+      const next = await invoicesApi.updateInvoice(invoiceId, {
+        dueDate: dueDateDraft,
+      });
+      setDetail(next);
+      setDueDateDraft(next.dueDate);
+      setEditingDueDate(false);
+      onLoaded?.(next);
+    } catch (err) {
+      setDueDateError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível atualizar o vencimento.',
+      );
+    } finally {
+      setDueDateBusy(false);
+    }
+  }
+
   if (loading) {
     return <p className="page__empty">Carregando fatura…</p>;
   }
@@ -262,10 +295,63 @@ export function InvoiceDetailPanel({
             Fatura {formatMonth(detail.referenceMonth)}
           </h2>
           <p className="section__hint">
-            {detail.card.label} · {detail.card.bank.name} · vence{' '}
-            {formatDueDate(detail.dueDate)} · {statusLabel(detail.status)} ·{' '}
-            {formatMoney(detail.balance)}
+            {detail.card.label} · {detail.card.bank.name} ·{' '}
+            {statusLabel(detail.status)} · {formatMoney(detail.balance)}
           </p>
+          {editingDueDate ? (
+            <div className="invoice-due-date-edit form-stack">
+              <label htmlFor="invoice-due-date">Vencimento</label>
+              <input
+                id="invoice-due-date"
+                type="date"
+                value={dueDateDraft}
+                disabled={dueDateBusy}
+                onChange={(event) => setDueDateDraft(event.target.value)}
+              />
+              {dueDateError ? (
+                <p className="alert" role="alert">
+                  {dueDateError}
+                </p>
+              ) : null}
+              <div className="section__actions">
+                <button
+                  type="button"
+                  className="btn btn--primary btn--compact"
+                  disabled={dueDateBusy}
+                  onClick={() => void handleSaveDueDate()}
+                >
+                  {dueDateBusy ? 'Salvando…' : 'Salvar vencimento'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--compact"
+                  disabled={dueDateBusy}
+                  onClick={() => {
+                    setEditingDueDate(false);
+                    setDueDateDraft(detail.dueDate);
+                    setDueDateError(null);
+                  }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="section__hint">
+              Vence {formatDueDate(detail.dueDate)}{' '}
+              <button
+                type="button"
+                className="btn btn--ghost btn--compact"
+                onClick={() => {
+                  setDueDateDraft(detail.dueDate);
+                  setEditingDueDate(true);
+                  setDueDateError(null);
+                }}
+              >
+                Editar
+              </button>
+            </p>
+          )}
         </div>
         {detail.status !== 'paid' ? (
           <div className="section__actions">

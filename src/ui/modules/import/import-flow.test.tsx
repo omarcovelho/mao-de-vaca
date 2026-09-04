@@ -138,6 +138,7 @@ describe('Import UI flow', () => {
               category: 'Alimentação',
               categoryId: 'food',
               competenceDate: '2026-01-15',
+              duplicateWarning: null,
             },
             {
               line: 3,
@@ -147,6 +148,7 @@ describe('Import UI flow', () => {
               category: 'Lazer',
               categoryId: null,
               competenceDate: '2026-01-16',
+              duplicateWarning: null,
             },
           ],
           unknownCategories: ['Lazer'],
@@ -155,6 +157,7 @@ describe('Import UI flow', () => {
             validCount: 2,
             errorCount: 0,
             unknownCategoryCount: 1,
+            duplicateWarningCount: 0,
           },
         });
       }
@@ -164,6 +167,7 @@ describe('Import UI flow', () => {
           importBatchId: 'batch-1',
           created: 2,
           skipped: 0,
+          deselected: 0,
           errors: [],
         });
       }
@@ -211,6 +215,12 @@ describe('Import UI flow', () => {
     expect(
       screen.getByRole('heading', { name: 'Categorias desconhecidas' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 2/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 3/i }),
+    ).toBeChecked();
 
     await user.click(screen.getByRole('button', { name: 'Confirmar importação' }));
 
@@ -229,6 +239,253 @@ describe('Import UI flow', () => {
     expect(JSON.parse(String(body.get('categoryMappings')))).toEqual({
       Lazer: { create: { name: 'Lazer' } },
     });
+    expect(JSON.parse(String(body.get('selectedLines')))).toEqual([2, 3]);
+  });
+
+  it('defaults existing duplicates off and deselects warning rows', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/imports/options')) {
+        return Response.json(defaultOptions);
+      }
+      if (url.endsWith('/api/imports') && (!init || init.method === undefined)) {
+        return Response.json([]);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([
+          {
+            id: 'food',
+            parentId: null,
+            name: 'Alimentação',
+            kind: 'EXPENSE',
+            color: '#2d6a4f',
+            icon: 'utensils',
+            active: true,
+            depth: 1,
+            isLeaf: true,
+            children: [],
+          },
+        ]);
+      }
+      if (url.includes('/api/imports/preview')) {
+        return Response.json({
+          rows: [
+            {
+              line: 2,
+              description: 'NuTag A',
+              amount: '-12.00',
+              type: 'EXPENSE',
+              category: 'Alimentação',
+              categoryId: 'food',
+              competenceDate: '2026-01-06',
+              duplicateWarning: 'existing',
+            },
+            {
+              line: 3,
+              description: 'NuTag B',
+              amount: '-12.00',
+              type: 'EXPENSE',
+              category: 'Alimentação',
+              categoryId: 'food',
+              competenceDate: '2026-01-06',
+              duplicateWarning: 'within_file',
+            },
+            {
+              line: 4,
+              description: 'NuTag C',
+              amount: '-12.00',
+              type: 'EXPENSE',
+              category: 'Alimentação',
+              categoryId: 'food',
+              competenceDate: '2026-01-06',
+              duplicateWarning: 'within_file',
+            },
+          ],
+          unknownCategories: [],
+          summary: {
+            rowCount: 3,
+            validCount: 3,
+            errorCount: 0,
+            unknownCategoryCount: 0,
+            duplicateWarningCount: 3,
+          },
+        });
+      }
+      if (url.includes('/api/imports/confirm')) {
+        return Response.json({
+          id: 'batch-2',
+          importBatchId: 'batch-2',
+          created: 0,
+          skipped: 0,
+          deselected: 3,
+          errors: [],
+        });
+      }
+      if (url.endsWith('/api/imports')) {
+        return Response.json([]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderImportApp();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Importar' }),
+    ).toBeInTheDocument();
+
+    const fileInput = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    await user.upload(
+      fileInput,
+      new File(['csv'], 'dup.csv', { type: 'text/csv' }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Pré-visualizar' }));
+
+    expect(await screen.findByText(/Já importado/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 2/i }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 3/i }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 4/i }),
+    ).toBeChecked();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Desmarcar avisos de duplicação' }),
+    );
+
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 3/i }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole('checkbox', { name: /Importar linha 4/i }),
+    ).not.toBeChecked();
+    expect(
+      screen.getByRole('button', { name: 'Confirmar importação' }),
+    ).toBeDisabled();
+  });
+
+  it('deletes an import from history after confirmation', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    let historyCalls = 0;
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/imports/options')) {
+        return Response.json(defaultOptions);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([]);
+      }
+      if (method === 'DELETE' && url.includes('/api/imports/batch-1')) {
+        return Response.json({ id: 'batch-1', deletedTransactions: 2 });
+      }
+      if (url.endsWith('/api/imports') || url === '/api/imports') {
+        historyCalls += 1;
+        if (historyCalls === 1) {
+          return Response.json([
+            {
+              id: 'batch-1',
+              importMode: 'transactions',
+              parserId: 'standard',
+              fileName: 'extrato.csv',
+              accountId: 'acc-1',
+              accountLabel: 'Nubank CC',
+              createdCount: 2,
+              skippedCount: 0,
+              errorCount: 0,
+              createdAt: '2026-01-20T00:00:00.000Z',
+            },
+          ]);
+        }
+        return Response.json([]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderImportApp();
+
+    expect(await screen.findByText('extrato.csv')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(
+      await screen.findByText('Nenhuma importação ainda.'),
+    ).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
+  it('shows API error when delete is blocked', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/imports/options')) {
+        return Response.json(defaultOptions);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([]);
+      }
+      if (method === 'DELETE' && url.includes('/api/imports/batch-paid')) {
+        return Response.json(
+          { message: 'Não é possível excluir: a fatura já está quitada' },
+          { status: 409 },
+        );
+      }
+      if (url.includes('/api/imports')) {
+        return Response.json([
+          {
+            id: 'batch-paid',
+            importMode: 'invoice',
+            parserId: 'standard',
+            fileName: 'fatura.csv',
+            cardId: 'card-1',
+            cardLabel: 'Nubank Roxinho',
+            createdCount: 1,
+            skippedCount: 0,
+            errorCount: 0,
+            createdAt: '2026-01-20T00:00:00.000Z',
+          },
+        ]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderImportApp();
+
+    expect(await screen.findByText('fatura.csv')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    expect(
+      await screen.findByRole('alert'),
+    ).toHaveTextContent(/fatura já está quitada/i);
   });
 
   it('switches to invoice mode with card and invoice selectors', async () => {

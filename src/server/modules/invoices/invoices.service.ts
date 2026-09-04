@@ -14,6 +14,7 @@ import {
   InvoiceStatusApi,
   InvoiceTransactionItem,
   LinkInvoicePaymentsDto,
+  UpdateInvoiceDto,
 } from './invoices.types';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -110,6 +111,26 @@ export class InvoicesService {
   ): Promise<InvoiceDetailResponse> {
     const invoice = await this.loadInvoiceDetail(userId, invoiceId);
     return this.toDetailResponse(invoice);
+  }
+
+  async update(
+    userId: string,
+    invoiceId: string,
+    dto: UpdateInvoiceDto,
+  ): Promise<InvoiceDetailResponse> {
+    await this.getOwnedInvoice(userId, invoiceId);
+
+    if (dto.dueDate === undefined) {
+      throw new BadRequestException('Informe a data de vencimento');
+    }
+
+    const dueDate = this.parseDueDate(dto.dueDate);
+    await this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { dueDate },
+    });
+
+    return this.getById(userId, invoiceId);
   }
 
   async create(

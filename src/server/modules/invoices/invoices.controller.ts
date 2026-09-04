@@ -4,12 +4,17 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
 } from '@nestjs/common';
 import { AuthUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { InvoicesService } from './invoices.service';
-import { CreateInvoiceDto, LinkInvoicePaymentsDto } from './invoices.types';
+import {
+  CreateInvoiceDto,
+  LinkInvoicePaymentsDto,
+  UpdateInvoiceDto,
+} from './invoices.types';
 
 @Controller('cards/:cardId/invoices')
 export class InvoicesController {
@@ -41,6 +46,15 @@ export class InvoiceDetailController {
   @Get(':id')
   getOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.invoicesService.getById(user.userId, id);
+  }
+
+  @Patch(':id')
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: UpdateInvoiceDto,
+  ) {
+    return this.invoicesService.update(user.userId, id, body);
   }
 
   @Post(':id/payments')

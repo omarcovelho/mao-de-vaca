@@ -1,7 +1,7 @@
 # Mão de Vaca — Arquitetura do MVP
 
 **Status:** Rascunho para planejamento de implementação  
-**Última atualização:** 2026-09-02  
+**Última atualização:** 2026-09-03  
 **Fonte de verdade do produto:** [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD)
 
 Este documento descreve *como* o MVP é construído em alto nível. Histórias de usuário, épicos e tarefas devem rastrear até aqui e até a definição de produto (especialmente §3, §5 e §6).
@@ -249,7 +249,7 @@ Todo parser, independentemente de banco ou formato, produz lançamentos neste mo
 | `category` | Nome da categoria pré-atribuída no CSV (string do parser; resolvida para `categoryId` na confirmação; opcional no modo fatura → `(sem categoria)`) |
 | `accountId` | Conta cadastrada (modo transações) — mutuamente exclusivo com `cardId` |
 | `cardId` | Cartão cadastrado (modo fatura) |
-| `dedupKey` | Identificador estável para deduplicação (`accountId` ou `cardId` + data + valor + descrição) |
+| `dedupKey` | Identificador estável para deduplicação (`accountId`/`cardId` + data + valor + descrição + índice de ocorrência no arquivo; occurrence 1 compatível com chave legada) |
 | `invoiceId` | Fatura de destino (modo fatura) |
 
 Interface TypeScript em `src/server/modules/import/parsers/`; mapeamento para entidades Prisma no módulo de domínio. **Não exposto à UI.**
@@ -299,11 +299,12 @@ A importação é o canal de entrada de lançamentos — feita em `ui/modules/im
 | **Seleção de origem** | Conta cadastrada **ou** Cartão + Fatura de destino |
 | **Seleção de parser** | Dropdown; único item "Padrão" no MVP |
 | **Upload** | Arquivo `.csv` + botão enviar |
-| **Pré-visualização** | Lista de lançamentos parseados; destaque de **categorias desconhecidas** com UI de mapeamento (existente ou criar nova) |
-| **Confirmação** | Persistência após 100% das categorias resolvidas (RN-12) |
+| **Pré-visualização** | Lista com checkbox por linha; avisos de duplicata (`existing` / `within_file`); destaque de **categorias desconhecidas** com UI de mapeamento |
+| **Seleção de linhas** | Usuário escolhe o que importar; ação “Desmarcar avisos de duplicação”; defaults: `existing` desmarcado, demais válidas marcadas |
+| **Confirmação** | Persistência das linhas selecionadas após categorias das selecionadas resolvidas (RN-12) |
 | **Estado de progresso** | Loading durante processamento síncrono no server |
-| **Resumo pós-importação** | Contadores: novos, duplicados ignorados, erros por linha |
-| **Histórico** | Lista de `ImportBatch` anteriores |
+| **Resumo pós-importação** | Contadores: novos, duplicados ignorados (rede de segurança), desmarcados, erros por linha |
+| **Histórico** | Lista de `ImportBatch` anteriores; exclusão hard delete com confirmação e guards |
 
 **Fluxo do usuário:**
 
@@ -313,10 +314,10 @@ A importação é o canal de entrada de lançamentos — feita em `ui/modules/im
 4. Seleciona parser (padrão no MVP)
 5. Faz upload do CSV
 6. UI envia `multipart/form-data` para `POST /api/imports/preview`
-7. Server parseia e retorna preview com `unknownCategories[]`
-8. Usuário mapeia categorias desconhecidas (dropdown de cadastradas ou "criar nova")
-9. UI envia `POST /api/imports/confirm` com `categoryMappings` + metadados do lote
-10. Server persiste com deduplicação, resolvendo `category` → `categoryId`
+7. Server parseia e retorna preview com `unknownCategories[]`, `duplicateWarning` por linha e `summary.duplicateWarningCount`
+8. Usuário revisa seleção (checkbox), desmarca avisos se quiser, e mapeia categorias das linhas selecionadas
+9. UI envia `POST /api/imports/confirm` com `categoryMappings`, `selectedLines` e metadados do lote
+10. Server persiste só as linhas selecionadas (dedupKey com occurrence; skip se chave já existir)
 11. UI exibe resumo e atualiza histórico
 
 ```mermaid
@@ -333,13 +334,13 @@ sequenceDiagram
   ImportUI->>Preview: multipart accountId/cardId + parserId + file
   Preview->>Parser: parse(buffer) → CanonicalTransaction[]
   Parser-->>Preview: modelo canônico com category string
-  Preview-->>ImportUI: rows, unknownCategories, summary
-  User->>ImportUI: mapeia categorias desconhecidas
-  ImportUI->>Confirm: categoryMappings + batch metadata
+  Preview-->>ImportUI: rows com avisos, unknownCategories, summary
+  User->>ImportUI: seleciona linhas e mapeia categorias
+  ImportUI->>Confirm: categoryMappings + selectedLines + batch metadata
   Confirm->>Categories: resolve/create categoryId
-  Confirm->>Domain: persist + deduplicate
+  Confirm->>Domain: persist selected + safety dedup
   Domain-->>Confirm: ImportResult
-  Confirm-->>ImportUI: created, skipped, errors
+  Confirm-->>ImportUI: created, skipped, deselected, errors
   ImportUI-->>User: resumo visual
 ```
 
@@ -351,8 +352,11 @@ sequenceDiagram
 - Preview e confirm são **multipart** (arquivo reenviado no confirm; sem cache de preview)
 - Importação **síncrona** no MVP; sem fila nem SSE
 - `categoryMappings`: `Record<string, categoryId | { create: { name } }>` — chave é o texto do CSV
+- `selectedLines`: JSON array de números de linha do CSV (obrigatório no confirm)
+- `DELETE /api/imports/:id` — hard delete do lote (txs + `ImportBatch`); **não** remove fatura/conta/categoria; `409` se o lote contém `TRANSFER` ou se a fatura vinculada está `paid`; resposta `{ id, deletedTransactions }`
 - Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-corrente.csv`
-- `dedupKey`: SHA-256 de `accountId|competenceDate|amount|descrição normalizada` (único por `userId`)
+- `dedupKey`: SHA-256 de `originId|competenceDate|amount|descrição normalizada` (occurrence 1); occurrence ≥2 inclui `|#n` — permite gastos idênticos legítimos no mesmo dia
+- Preview marca `duplicateWarning`: `existing` (chave já no banco) ou `within_file` (mesmo fingerprint 2+ vezes no arquivo)
 - Transferência em dois extratos: dois lançamentos independentes até vínculo manual futuro
 
 ### 6.2 Vínculo manual pagamento ↔ fatura
@@ -421,8 +425,9 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 - `GET /api/imports/options` — modos, parsers, contas ativas, cartões ativos, `invoicesByCard`
 - `POST /api/imports/preview` — `multipart/form-data`: `importMode` + (`accountId` \| `cardId`+`invoiceId`) + `parserId` + `file` → `{ rows, unknownCategories[], summary }` (não persiste)
-- `POST /api/imports/confirm` — mesmo multipart + `categoryMappings` (JSON string) → `{ id, importBatchId, created, skipped, errors[] }` (cada `Transaction` gravada com o mesmo `importBatchId`)
+- `POST /api/imports/confirm` — mesmo multipart + `categoryMappings` (JSON string) + `selectedLines` → `{ id, importBatchId, created, skipped, deselected?, errors[] }` (cada `Transaction` gravada com o mesmo `importBatchId`)
 - `GET /api/imports` — histórico de importações
+- `DELETE /api/imports/:id` — desfaz lote (hard delete de lançamentos + batch); `409` se contém transferências ou fatura quitada; fatura permanece
 
 ### Lançamentos
 
@@ -433,6 +438,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 - `GET /api/invoices` — lista com saldo/status derivados
 - `GET /api/invoices/:id` — detalhe + compras + pagamentos vinculados
+- `PATCH /api/invoices/:id` — atualizar `dueDate` (YYYY-MM-DD)
 - `POST /api/invoices/:id/payments` — vincular pagamento(s)
 
 ### Compra-pai
@@ -541,3 +547,6 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-03 | V3 import conta: parser padrão (sinal → tipo), preview/confirm multipart, dedupKey, transferências em dois arquivos |
 | 2026-09-03 | V5 lançamentos: listagem mês+regime, `Transaction.active`, PATCH categoria/desativar; V5 pode seguir V3 sem V4 |
 | 2026-09-03 | V4 faturas: `Invoice`, import modo fatura, `cashDate` nullable, saldo = sum(imported), sinais iguais ao extrato (+ = estorno/`EXPENSE`) |
+| 2026-09-03 | Import: preview com avisos de duplicata, seleção por linha (`selectedLines`), dedupKey com occurrence |
+| 2026-09-03 | Import: `DELETE /api/imports/:id` hard delete com guards (TRANSFER, fatura paid) |
+| 2026-09-03 | Faturas: `PATCH /api/invoices/:id` para editar `dueDate` |

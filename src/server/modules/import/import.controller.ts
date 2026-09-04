@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  Param,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -38,6 +40,12 @@ export class ImportsController {
     return this.importService.listHistory(user.userId);
   }
 
+  @Delete(':id')
+  @HttpCode(200)
+  deleteBatch(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.importService.deleteBatch(user.userId, id);
+  }
+
   @Post('preview')
   @HttpCode(200)
   @UseInterceptors(uploadInterceptor)
@@ -70,6 +78,7 @@ export class ImportsController {
       invoiceId?: string;
       parserId?: string;
       categoryMappings?: string;
+      selectedLines?: string;
     },
   ) {
     return this.importService.confirm(user.userId, body, file);

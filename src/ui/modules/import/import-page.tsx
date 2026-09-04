@@ -11,6 +11,7 @@ import type {
   ImportModeId,
   ImportOptions,
   PreviewResponse,
+  PreviewRow,
 } from './types';
 
 const TYPE_LABELS = {
@@ -18,6 +19,11 @@ const TYPE_LABELS = {
   INCOME: 'Receita',
   TRANSFER: 'Transferência',
   INVOICE_PAYMENT: 'Pagamento de fatura',
+} as const;
+
+const WARNING_LABELS = {
+  existing: 'Já importado',
+  within_file: 'Possível duplicata no arquivo',
 } as const;
 
 type MappingDraft = {
@@ -77,6 +83,24 @@ function formatMonth(isoDate: string): string {
   return `${month}/${year}`;
 }
 
+function defaultSelectedLines(rows: PreviewRow[]): Set<number> {
+  const selected = new Set<number>();
+  for (const row of rows) {
+    if (row.error) {
+      continue;
+    }
+    if (row.duplicateWarning === 'existing') {
+      continue;
+    }
+    selected.add(row.line);
+  }
+  return selected;
+}
+
+function validPreviewRows(rows: PreviewRow[]): PreviewRow[] {
+  return rows.filter((row) => !row.error);
+}
+
 export function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<ImportOptions | null>(null);
@@ -92,6 +116,7 @@ export function ImportPage() {
   const [busy, setBusy] = useState<'preview' | 'confirm' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
   const [drafts, setDrafts] = useState<Record<string, MappingDraft>>({});
   const [result, setResult] = useState<ConfirmResponse | null>(null);
 
@@ -155,12 +180,28 @@ export function ImportPage() {
     );
   }, [cardInvoices]);
 
+  const selectedCount = selectedLines.size;
+
+  const unknownForSelected = useMemo(() => {
+    if (!preview) {
+      return [];
+    }
+    return preview.unknownCategories.filter((name) =>
+      preview.rows.some(
+        (row) =>
+          selectedLines.has(row.line) &&
+          !row.error &&
+          (row.category ?? '') === name,
+      ),
+    );
+  }, [preview, selectedLines]);
+
   const canConfirm = useMemo(() => {
-    if (!preview || !file) {
+    if (!preview || !file || selectedCount === 0) {
       return false;
     }
-    return mappingsReady(preview.unknownCategories, drafts);
-  }, [preview, file, drafts]);
+    return mappingsReady(unknownForSelected, drafts);
+  }, [preview, file, drafts, selectedCount, unknownForSelected]);
 
   const originReady =
     importMode === 'transactions' ? Boolean(accountId) : Boolean(cardId && invoiceId);
@@ -168,6 +209,7 @@ export function ImportPage() {
   function handleFile(next: File | null) {
     setFile(next);
     setPreview(null);
+    setSelectedLines(new Set());
     setResult(null);
     setDrafts({});
     setError(null);
@@ -176,6 +218,46 @@ export function ImportPage() {
   function switchMode(mode: ImportModeId) {
     setImportMode(mode);
     handleFile(null);
+  }
+
+  function toggleLine(line: number) {
+    setSelectedLines((current) => {
+      const next = new Set(current);
+      if (next.has(line)) {
+        next.delete(line);
+      } else {
+        next.add(line);
+      }
+      return next;
+    });
+  }
+
+  function selectAllValid() {
+    if (!preview) {
+      return;
+    }
+    setSelectedLines(
+      new Set(validPreviewRows(preview.rows).map((row) => row.line)),
+    );
+  }
+
+  function deselectAll() {
+    setSelectedLines(new Set());
+  }
+
+  function deselectDuplicateWarnings() {
+    if (!preview) {
+      return;
+    }
+    setSelectedLines((current) => {
+      const next = new Set(current);
+      for (const row of preview.rows) {
+        if (row.duplicateWarning) {
+          next.delete(row.line);
+        }
+      }
+      return next;
+    });
   }
 
   async function handlePreview(event: FormEvent) {
@@ -199,6 +281,7 @@ export function ImportPage() {
     try {
       const next = await importApi.previewImport(form);
       setPreview(next);
+      setSelectedLines(defaultSelectedLines(next.rows));
       setDrafts(
         Object.fromEntries(
           next.unknownCategories.map((name) => [
@@ -225,7 +308,11 @@ export function ImportPage() {
     form.set('parserId', parserId);
     form.set(
       'categoryMappings',
-      JSON.stringify(toCategoryMappings(preview.unknownCategories, drafts)),
+      JSON.stringify(toCategoryMappings(unknownForSelected, drafts)),
+    );
+    form.set(
+      'selectedLines',
+      JSON.stringify([...selectedLines].sort((a, b) => a - b)),
     );
     form.set('file', file);
     if (importMode === 'transactions') {
@@ -244,6 +331,30 @@ export function ImportPage() {
         err instanceof Error
           ? err.message
           : 'Não foi possível confirmar a importação.',
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDeleteBatch(item: ImportHistoryItem) {
+    const confirmed = window.confirm(
+      `Excluir permanentemente ${item.createdCount} lançamento(s) de “${item.fileName}”? A fatura (se houver) não será removida.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setBusy('confirm');
+    setError(null);
+    try {
+      await importApi.deleteImport(item.id);
+      setHistory(await importApi.listImportHistory());
+      setResult(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível excluir a importação.',
       );
     } finally {
       setBusy(null);
@@ -275,6 +386,8 @@ export function ImportPage() {
       </section>
     );
   }
+
+  const warningCount = preview?.summary.duplicateWarningCount ?? 0;
 
   return (
     <section className="page">
@@ -444,25 +557,74 @@ export function ImportPage() {
           <p className="form-hint">
             {preview.summary.validCount} linhas válidas,{' '}
             {preview.summary.errorCount} erros,{' '}
-            {preview.summary.unknownCategoryCount} categorias desconhecidas.
+            {preview.summary.unknownCategoryCount} categorias desconhecidas
+            {warningCount > 0 ? `, ${warningCount} avisos de duplicação` : ''}.{' '}
+            {selectedCount} selecionadas para importar.
           </p>
+          <div
+            className="import-preview-actions"
+            role="group"
+            aria-label="Seleção de linhas"
+          >
+            <button
+              type="button"
+              className="btn btn--secondary btn--compact"
+              onClick={selectAllValid}
+            >
+              Selecionar todas
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary btn--compact"
+              onClick={deselectAll}
+            >
+              Desmarcar todas
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary btn--compact"
+              onClick={deselectDuplicateWarnings}
+              disabled={warningCount === 0}
+            >
+              Desmarcar avisos de duplicação
+            </button>
+          </div>
           <ul className="import-preview-list">
             {preview.rows.map((row) => (
-              <li key={row.line} className="import-preview-row">
+              <li
+                key={row.line}
+                className={`import-preview-row${
+                  row.duplicateWarning ? ' import-preview-row--warning' : ''
+                }`}
+              >
                 {row.error ? (
                   <span>
                     Linha {row.line}: {row.error}
                   </span>
                 ) : (
                   <>
-                    <span className="import-preview-row__text">
-                      {row.description}
-                      <span className="import-preview-row__meta">
-                        {' '}
-                        · {row.category} · {row.competenceDate} ·{' '}
-                        {row.type ? TYPE_LABELS[row.type] : ''}
+                    <label className="import-preview-row__select">
+                      <input
+                        type="checkbox"
+                        checked={selectedLines.has(row.line)}
+                        onChange={() => toggleLine(row.line)}
+                        aria-label={`Importar linha ${row.line}: ${row.description ?? ''}`}
+                      />
+                      <span className="import-preview-row__text">
+                        {row.description}
+                        <span className="import-preview-row__meta">
+                          {' '}
+                          · {row.category} · {row.competenceDate} ·{' '}
+                          {row.type ? TYPE_LABELS[row.type] : ''}
+                        </span>
+                        {row.duplicateWarning ? (
+                          <span className="import-preview-row__warning">
+                            {' '}
+                            · {WARNING_LABELS[row.duplicateWarning]}
+                          </span>
+                        ) : null}
                       </span>
-                    </span>
+                    </label>
                     <span
                       className={
                         row.amount?.startsWith('-')
@@ -561,6 +723,11 @@ export function ImportPage() {
             >
               Confirmar importação
             </button>
+            {selectedCount === 0 ? (
+              <p className="form-hint">
+                Selecione ao menos uma linha para importar.
+              </p>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -569,6 +736,9 @@ export function ImportPage() {
         <div className="import-result" role="status">
           <p className="status-pill status-pill--success">
             {result.created} criados, {result.skipped} ignorados
+            {typeof result.deselected === 'number'
+              ? `, ${result.deselected} desmarcados`
+              : ''}
             {result.errors.length > 0
               ? `, ${result.errors.length} erros`
               : ''}
@@ -591,14 +761,25 @@ export function ImportPage() {
         ) : (
           <ul className="import-history">
             {history.map((item) => (
-              <li key={item.id}>
-                <strong>{item.fileName}</strong>
-                <span>
-                  {item.importMode === 'invoice'
-                    ? (item.cardLabel ?? 'Cartão')
-                    : (item.accountLabel ?? 'Conta')}{' '}
-                  · {item.createdCount} criados, {item.skippedCount} ignorados
-                </span>
+              <li key={item.id} className="import-history__item">
+                <div className="import-history__meta">
+                  <strong>{item.fileName}</strong>
+                  <span>
+                    {item.importMode === 'invoice'
+                      ? (item.cardLabel ?? 'Cartão')
+                      : (item.accountLabel ?? 'Conta')}{' '}
+                    · {item.createdCount} criados, {item.skippedCount}{' '}
+                    ignorados
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--compact"
+                  disabled={busy !== null}
+                  onClick={() => void handleDeleteBatch(item)}
+                >
+                  Excluir
+                </button>
               </li>
             ))}
           </ul>

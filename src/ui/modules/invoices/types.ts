@@ -15,6 +15,10 @@ export type CreateInvoiceInput = {
   dueDate: string;
 };
 
+export type UpdateInvoiceInput = {
+  dueDate: string;
+};
+
 export type InvoiceTransaction = {
   id: string;
   description: string;

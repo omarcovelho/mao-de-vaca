@@ -373,7 +373,6 @@ Preocupações transversais (logging, validação, testes TDD) são **tarefas de
 - Multitenant ativo (cadastro de usuários)
 - Fila assíncrona para importações grandes
 - Vínculo manual de transferências entre contas (duas pernas em extratos distintos)
-- Bulk delete de lançamentos por `importBatchId` (desfazer um lote de importação)
 
 ---
 

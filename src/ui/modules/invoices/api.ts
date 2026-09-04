@@ -1,4 +1,9 @@
-import type { CreateInvoiceInput, Invoice, InvoiceDetail } from './types';
+import type {
+  CreateInvoiceInput,
+  Invoice,
+  InvoiceDetail,
+  UpdateInvoiceInput,
+} from './types';
 
 async function jsonFetch(input: string, init?: RequestInit): Promise<Response> {
   return fetch(input, {
@@ -38,6 +43,22 @@ export async function getInvoice(invoiceId: string): Promise<InvoiceDetail> {
   const response = await jsonFetch(`/api/invoices/${invoiceId}`);
   if (!response.ok) {
     throw new Error(await readApiError(response, 'Falha ao carregar a fatura'));
+  }
+  return response.json() as Promise<InvoiceDetail>;
+}
+
+export async function updateInvoice(
+  invoiceId: string,
+  input: UpdateInvoiceInput,
+): Promise<InvoiceDetail> {
+  const response = await jsonFetch(`/api/invoices/${invoiceId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, 'Não foi possível atualizar a fatura'),
+    );
   }
   return response.json() as Promise<InvoiceDetail>;
 }
