@@ -304,7 +304,7 @@ A importação é o canal de entrada de lançamentos — feita em `ui/modules/im
 | **Confirmação** | Persistência das linhas selecionadas após categorias das selecionadas resolvidas (RN-12) |
 | **Estado de progresso** | Loading durante processamento síncrono no server |
 | **Resumo pós-importação** | Contadores: novos, duplicados ignorados (rede de segurança), desmarcados, erros por linha |
-| **Histórico** | Lista de `ImportBatch` anteriores |
+| **Histórico** | Lista de `ImportBatch` anteriores; exclusão hard delete com confirmação e guards |
 
 **Fluxo do usuário:**
 
@@ -353,6 +353,7 @@ sequenceDiagram
 - Importação **síncrona** no MVP; sem fila nem SSE
 - `categoryMappings`: `Record<string, categoryId | { create: { name } }>` — chave é o texto do CSV
 - `selectedLines`: JSON array de números de linha do CSV (obrigatório no confirm)
+- `DELETE /api/imports/:id` — hard delete do lote (txs + `ImportBatch`); **não** remove fatura/conta/categoria; `409` se o lote contém `TRANSFER` ou se a fatura vinculada está `paid`; resposta `{ id, deletedTransactions }`
 - Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-corrente.csv`
 - `dedupKey`: SHA-256 de `originId|competenceDate|amount|descrição normalizada` (occurrence 1); occurrence ≥2 inclui `|#n` — permite gastos idênticos legítimos no mesmo dia
 - Preview marca `duplicateWarning`: `existing` (chave já no banco) ou `within_file` (mesmo fingerprint 2+ vezes no arquivo)
@@ -424,8 +425,9 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 - `GET /api/imports/options` — modos, parsers, contas ativas, cartões ativos, `invoicesByCard`
 - `POST /api/imports/preview` — `multipart/form-data`: `importMode` + (`accountId` \| `cardId`+`invoiceId`) + `parserId` + `file` → `{ rows, unknownCategories[], summary }` (não persiste)
-- `POST /api/imports/confirm` — mesmo multipart + `categoryMappings` (JSON string) → `{ id, importBatchId, created, skipped, errors[] }` (cada `Transaction` gravada com o mesmo `importBatchId`)
+- `POST /api/imports/confirm` — mesmo multipart + `categoryMappings` (JSON string) + `selectedLines` → `{ id, importBatchId, created, skipped, deselected?, errors[] }` (cada `Transaction` gravada com o mesmo `importBatchId`)
 - `GET /api/imports` — histórico de importações
+- `DELETE /api/imports/:id` — desfaz lote (hard delete de lançamentos + batch); `409` se contém transferências ou fatura quitada; fatura permanece
 
 ### Lançamentos
 
@@ -545,3 +547,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-03 | V5 lançamentos: listagem mês+regime, `Transaction.active`, PATCH categoria/desativar; V5 pode seguir V3 sem V4 |
 | 2026-09-03 | V4 faturas: `Invoice`, import modo fatura, `cashDate` nullable, saldo = sum(imported), sinais iguais ao extrato (+ = estorno/`EXPENSE`) |
 | 2026-09-03 | Import: preview com avisos de duplicata, seleção por linha (`selectedLines`), dedupKey com occurrence |
+| 2026-09-03 | Import: `DELETE /api/imports/:id` hard delete com guards (TRANSFER, fatura paid) |

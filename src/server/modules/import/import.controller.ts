@@ -1,8 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  Param,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -36,6 +38,12 @@ export class ImportsController {
   @Get()
   listHistory(@CurrentUser() user: AuthUser) {
     return this.importService.listHistory(user.userId);
+  }
+
+  @Delete(':id')
+  @HttpCode(200)
+  deleteBatch(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.importService.deleteBatch(user.userId, id);
   }
 
   @Post('preview')

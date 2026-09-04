@@ -375,6 +375,119 @@ describe('Import UI flow', () => {
     ).toBeDisabled();
   });
 
+  it('deletes an import from history after confirmation', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    let historyCalls = 0;
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/imports/options')) {
+        return Response.json(defaultOptions);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([]);
+      }
+      if (method === 'DELETE' && url.includes('/api/imports/batch-1')) {
+        return Response.json({ id: 'batch-1', deletedTransactions: 2 });
+      }
+      if (url.endsWith('/api/imports') || url === '/api/imports') {
+        historyCalls += 1;
+        if (historyCalls === 1) {
+          return Response.json([
+            {
+              id: 'batch-1',
+              importMode: 'transactions',
+              parserId: 'standard',
+              fileName: 'extrato.csv',
+              accountId: 'acc-1',
+              accountLabel: 'Nubank CC',
+              createdCount: 2,
+              skippedCount: 0,
+              errorCount: 0,
+              createdAt: '2026-01-20T00:00:00.000Z',
+            },
+          ]);
+        }
+        return Response.json([]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderImportApp();
+
+    expect(await screen.findByText('extrato.csv')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(
+      await screen.findByText('Nenhuma importação ainda.'),
+    ).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
+  });
+
+  it('shows API error when delete is blocked', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/imports/options')) {
+        return Response.json(defaultOptions);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([]);
+      }
+      if (method === 'DELETE' && url.includes('/api/imports/batch-paid')) {
+        return Response.json(
+          { message: 'Não é possível excluir: a fatura já está quitada' },
+          { status: 409 },
+        );
+      }
+      if (url.includes('/api/imports')) {
+        return Response.json([
+          {
+            id: 'batch-paid',
+            importMode: 'invoice',
+            parserId: 'standard',
+            fileName: 'fatura.csv',
+            cardId: 'card-1',
+            cardLabel: 'Nubank Roxinho',
+            createdCount: 1,
+            skippedCount: 0,
+            errorCount: 0,
+            createdAt: '2026-01-20T00:00:00.000Z',
+          },
+        ]);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderImportApp();
+
+    expect(await screen.findByText('fatura.csv')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Excluir' }));
+
+    expect(
+      await screen.findByRole('alert'),
+    ).toHaveTextContent(/fatura já está quitada/i);
+  });
+
   it('switches to invoice mode with card and invoice selectors', async () => {
     const user = userEvent.setup();
     vi.mocked(fetch).mockImplementation(async (input) => {

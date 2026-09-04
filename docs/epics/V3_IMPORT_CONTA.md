@@ -22,9 +22,9 @@ Importação de CSV no modo **extrato de conta**: pré-visualização no server,
 - Validação completa no backend; UI só checa arquivo `.csv`, conta e parser.
 - Confirm reenvia o arquivo (stateless).
 - `dedupKey` inclui `accountId`: o mesmo movimento em outra conta é outro lançamento.
-- Todo lançamento persistido leva `importBatchId` do lote (confirm devolve esse `id`); **bulk delete por importação fica para depois**.
+- Todo lançamento persistido leva `importBatchId` do lote (confirm devolve esse `id`); `DELETE /api/imports/:id` faz hard delete do lote (txs + batch), sem apagar fatura; bloqueia se houver `TRANSFER` no lote ou fatura `paid`.
 - Transferência Itaú (despesa) / Nubank (receita) = dois imports independentes até vínculo manual futuro.
-- Modo fatura recusado na API e desabilitado na UI (V4).
+- Modo fatura entregue em V4.
 
 ## Sign-off
 

@@ -337,6 +337,30 @@ export function ImportPage() {
     }
   }
 
+  async function handleDeleteBatch(item: ImportHistoryItem) {
+    const confirmed = window.confirm(
+      `Excluir permanentemente ${item.createdCount} lançamento(s) de “${item.fileName}”? A fatura (se houver) não será removida.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setBusy('confirm');
+    setError(null);
+    try {
+      await importApi.deleteImport(item.id);
+      setHistory(await importApi.listImportHistory());
+      setResult(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível excluir a importação.',
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (loading) {
     return (
       <section className="page">
@@ -737,14 +761,25 @@ export function ImportPage() {
         ) : (
           <ul className="import-history">
             {history.map((item) => (
-              <li key={item.id}>
-                <strong>{item.fileName}</strong>
-                <span>
-                  {item.importMode === 'invoice'
-                    ? (item.cardLabel ?? 'Cartão')
-                    : (item.accountLabel ?? 'Conta')}{' '}
-                  · {item.createdCount} criados, {item.skippedCount} ignorados
-                </span>
+              <li key={item.id} className="import-history__item">
+                <div className="import-history__meta">
+                  <strong>{item.fileName}</strong>
+                  <span>
+                    {item.importMode === 'invoice'
+                      ? (item.cardLabel ?? 'Cartão')
+                      : (item.accountLabel ?? 'Conta')}{' '}
+                    · {item.createdCount} criados, {item.skippedCount}{' '}
+                    ignorados
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--compact"
+                  disabled={busy !== null}
+                  onClick={() => void handleDeleteBatch(item)}
+                >
+                  Excluir
+                </button>
               </li>
             ))}
           </ul>

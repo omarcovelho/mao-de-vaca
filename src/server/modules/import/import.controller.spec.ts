@@ -550,4 +550,165 @@ describe('Import HTTP', () => {
     });
     expect(row?.categoryId).toBe(child.id);
   });
+
+  it('DELETE /api/imports/:id hard-deletes transactions and batch', async () => {
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({ Lazer: { create: { name: 'Lazer' } } }),
+      )
+      .field('selectedLines', JSON.stringify(CSV_LINES))
+      .attach('file', Buffer.from(CSV), 'extrato.csv')
+      .expect(200);
+
+    const deleted = await request(app.getHttpServer())
+      .delete(`/api/imports/${confirmed.body.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(deleted.body).toEqual({
+      id: confirmed.body.id,
+      deletedTransactions: 3,
+    });
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(0);
+    expect(await prisma.importBatch.count({ where: { userId } })).toBe(0);
+  });
+
+  it('DELETE /api/imports/:id returns 404 for unknown batch', async () => {
+    await request(app.getHttpServer())
+      .delete('/api/imports/does-not-exist')
+      .set('Cookie', authCookie)
+      .expect(404);
+  });
+
+  it('DELETE /api/imports/:id rejects batches that contain transfers', async () => {
+    const transferCsv = `data,descricao,valor,categoria,tipo
+2026-03-01,PIX para poupança,-500.00,Alimentação,transferência
+`;
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field('categoryMappings', '{}')
+      .field('selectedLines', JSON.stringify([2]))
+      .attach('file', Buffer.from(transferCsv), 'transfer.csv')
+      .expect(200);
+
+    const response = await request(app.getHttpServer())
+      .delete(`/api/imports/${confirmed.body.id}`)
+      .set('Cookie', authCookie)
+      .expect(409);
+
+    expect(response.body.message).toMatch(/transferências/i);
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(1);
+    expect(await prisma.importBatch.count({ where: { userId } })).toBe(1);
+  });
+
+  it('DELETE /api/imports/:id rejects invoice-mode batch when invoice is paid', async () => {
+    const card = await prisma.card.create({
+      data: { userId, bankId, label: 'Nubank Delete' },
+    });
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: card.id,
+        referenceMonth: new Date('2026-07-01T00:00:00.000Z'),
+        dueDate: new Date('2026-08-10T00:00:00.000Z'),
+      },
+    });
+
+    const refundCsv = `date,title,amount
+2026-07-15,Estorno teste,"10,00"
+`;
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'invoice')
+      .field('cardId', card.id)
+      .field('invoiceId', invoice.id)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({ '(sem categoria)': foodId }),
+      )
+      .field('selectedLines', JSON.stringify([2]))
+      .attach('file', Buffer.from(refundCsv), 'fatura-paid.csv')
+      .expect(200);
+
+    expect(confirmed.body.created).toBe(1);
+
+    const invoiceDetail = await request(app.getHttpServer())
+      .get(`/api/invoices/${invoice.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+    expect(invoiceDetail.body.status).toBe('paid');
+
+    const response = await request(app.getHttpServer())
+      .delete(`/api/imports/${confirmed.body.id}`)
+      .set('Cookie', authCookie)
+      .expect(409);
+
+    expect(response.body.message).toMatch(/quitada/i);
+    expect(await prisma.invoice.count({ where: { id: invoice.id } })).toBe(1);
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(1);
+  });
+
+  it('DELETE /api/imports/:id allows invoice-mode batch when invoice is open and keeps invoice', async () => {
+    const card = await prisma.card.create({
+      data: { userId, bankId, label: 'Nubank Open Delete' },
+    });
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: card.id,
+        referenceMonth: new Date('2026-06-01T00:00:00.000Z'),
+        dueDate: new Date('2026-07-10T00:00:00.000Z'),
+      },
+    });
+
+    const chargeCsv = `date,title,amount
+2026-06-15,Mercado,"-50,00"
+`;
+    const confirmed = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'invoice')
+      .field('cardId', card.id)
+      .field('invoiceId', invoice.id)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({ '(sem categoria)': foodId }),
+      )
+      .field('selectedLines', JSON.stringify([2]))
+      .attach('file', Buffer.from(chargeCsv), 'fatura-open.csv')
+      .expect(200);
+
+    const deleted = await request(app.getHttpServer())
+      .delete(`/api/imports/${confirmed.body.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(deleted.body.deletedTransactions).toBe(1);
+    expect(await prisma.invoice.count({ where: { id: invoice.id } })).toBe(1);
+    expect(await prisma.transaction.count({ where: { userId } })).toBe(0);
+    expect(await prisma.importBatch.count({ where: { userId } })).toBe(0);
+
+    const invoiceDetail = await request(app.getHttpServer())
+      .get(`/api/invoices/${invoice.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+    expect(invoiceDetail.body).toMatchObject({
+      balance: 0,
+      status: 'paid',
+      transactions: [],
+    });
+  });
 });

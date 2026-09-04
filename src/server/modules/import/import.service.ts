@@ -443,6 +443,53 @@ export class ImportService {
     }));
   }
 
+  async deleteBatch(userId: string, batchId: string) {
+    const batch = await this.prisma.importBatch.findFirst({
+      where: { id: batchId, userId },
+    });
+    if (!batch) {
+      throw new NotFoundException('Importação não encontrada');
+    }
+
+    const transferCount = await this.prisma.transaction.count({
+      where: {
+        userId,
+        importBatchId: batch.id,
+        type: TransactionType.TRANSFER,
+      },
+    });
+    if (transferCount > 0) {
+      throw new ConflictException(
+        'Não é possível excluir: o lote contém transferências',
+      );
+    }
+
+    if (batch.importMode === ImportMode.INVOICE && batch.invoiceId) {
+      const invoice = await this.invoicesService.getById(
+        userId,
+        batch.invoiceId,
+      );
+      if (invoice.status === 'paid') {
+        throw new ConflictException(
+          'Não é possível excluir: a fatura já está quitada',
+        );
+      }
+    }
+
+    const deleted = await this.prisma.$transaction(async (tx) => {
+      const removed = await tx.transaction.deleteMany({
+        where: { userId, importBatchId: batch.id },
+      });
+      await tx.importBatch.delete({ where: { id: batch.id } });
+      return removed.count;
+    });
+
+    return {
+      id: batch.id,
+      deletedTransactions: deleted,
+    };
+  }
+
   private async parseUpload(
     userId: string,
     fields: {
