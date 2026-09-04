@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, TransactionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CategoriesService } from '../categories/categories.service';
+import { SYSTEM_CATEGORY_KEYS } from '../categories/system-categories';
 import {
   CreateInvoiceDto,
   InvoiceDetailResponse,
@@ -69,7 +71,10 @@ type InvoiceDetailRecord = Prisma.InvoiceGetPayload<{
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categoriesService: CategoriesService,
+  ) {}
 
   async listByCard(userId: string, cardId: string): Promise<InvoiceResponse[]> {
     await this.assertOwnedCard(userId, cardId);
@@ -232,6 +237,16 @@ export class InvoicesService {
       }
     }
 
+    const paymentCategoryId = await this.categoriesService.findSystemLeafId(
+      userId,
+      SYSTEM_CATEGORY_KEYS.INVOICE_PAYMENT,
+    );
+    if (!paymentCategoryId) {
+      throw new BadRequestException(
+        'Categoria de pagamento de fatura não encontrada',
+      );
+    }
+
     await this.prisma.$transaction(async (tx) => {
       for (const payment of payments) {
         await tx.invoicePaymentLink.create({
@@ -243,7 +258,10 @@ export class InvoicesService {
         });
         await tx.transaction.update({
           where: { id: payment.id },
-          data: { type: TransactionType.INVOICE_PAYMENT },
+          data: {
+            type: TransactionType.INVOICE_PAYMENT,
+            categoryId: paymentCategoryId,
+          },
         });
       }
 

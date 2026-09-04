@@ -16,7 +16,6 @@ const MAX_DEPTH = 5;
 const KIND_OPTIONS = [
   { value: 'EXPENSE', label: 'Gasto' },
   { value: 'INCOME', label: 'Renda' },
-  { value: 'NON_EXPENSE', label: 'Não-despesa' },
 ];
 
 const ICON_OPTIONS = CATEGORY_ICON_OPTIONS.map((option) => ({
@@ -83,7 +82,7 @@ function CategoryTreeRows({
               </div>
 
               <div className="category-row__actions">
-                {node.depth < MAX_DEPTH ? (
+                {!node.systemKey && node.depth < MAX_DEPTH ? (
                   <button
                     type="button"
                     className="btn btn--ghost btn--compact"
@@ -93,20 +92,26 @@ function CategoryTreeRows({
                     <span className="visually-hidden"> em {node.name}</span>
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--compact"
-                  onClick={() => onEdit(node)}
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--compact"
-                  onClick={() => onDeactivate(node.id)}
-                >
-                  Desativar
-                </button>
+                {!node.systemKey ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--compact"
+                    onClick={() => onEdit(node)}
+                  >
+                    Editar
+                  </button>
+                ) : null}
+                {!node.systemKey ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--compact"
+                    onClick={() => onDeactivate(node.id)}
+                  >
+                    Desativar
+                  </button>
+                ) : (
+                  <span className="category-row__kind">Sistema</span>
+                )}
               </div>
             </div>
 

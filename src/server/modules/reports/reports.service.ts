@@ -230,6 +230,7 @@ export class ReportsService {
       userId,
       active: true,
       type: { in: [TransactionType.EXPENSE, TransactionType.INCOME] },
+      category: { kind: { not: 'NON_EXPENSE' } },
       [dateField]: {
         gte: new Date(from),
         lte: new Date(to),

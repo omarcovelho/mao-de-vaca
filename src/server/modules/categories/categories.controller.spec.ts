@@ -75,6 +75,9 @@ describe('Categories HTTP', () => {
   });
 
   beforeEach(async () => {
+    await prisma.transferLink.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
     await prisma.transaction.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
@@ -87,6 +90,9 @@ describe('Categories HTTP', () => {
   });
 
   afterAll(async () => {
+    await prisma.transferLink.deleteMany({
+      where: { userId: { in: [userId, otherUserId] } },
+    });
     await prisma.transaction.deleteMany({
       where: { userId: { in: [userId, otherUserId] } },
     });
@@ -150,10 +156,13 @@ describe('Categories HTTP', () => {
       .set('Cookie', authCookie)
       .expect(200);
 
-    expect(tree.body).toHaveLength(1);
-    expect(tree.body[0].children).toHaveLength(1);
-    expect(tree.body[0].isLeaf).toBe(false);
-    expect(tree.body[0].children[0].name).toBe('Supermercado');
+    const alimentacao = tree.body.find(
+      (n: { name: string }) => n.name === 'Alimentação',
+    );
+    expect(alimentacao).toBeDefined();
+    expect(alimentacao.children).toHaveLength(1);
+    expect(alimentacao.isLeaf).toBe(false);
+    expect(alimentacao.children[0].name).toBe('Supermercado');
   });
 
   it('rejects duplicate sibling names with 409', async () => {
@@ -233,16 +242,25 @@ describe('Categories HTTP', () => {
       .get('/api/categories')
       .set('Cookie', authCookie)
       .expect(200);
-    expect(activeTree.body).toHaveLength(0);
+    expect(
+      activeTree.body.filter((n: { kind: string }) => n.kind === 'EXPENSE'),
+    ).toHaveLength(0);
+    expect(
+      activeTree.body.some(
+        (n: { systemKey: string | null }) => n.systemKey === 'NON_EXPENSE_ROOT',
+      ),
+    ).toBe(true);
 
     const all = await request(app.getHttpServer())
       .get('/api/categories?includeInactive=true')
       .set('Cookie', authCookie)
       .expect(200);
-    expect(all.body).toHaveLength(1);
-    expect(all.body[0].active).toBe(false);
-    expect(all.body[0].children[0].id).toBe(child.body.id);
-    expect(all.body[0].children[0].active).toBe(false);
+    const transporte = all.body.find(
+      (n: { name: string }) => n.name === 'Transporte',
+    );
+    expect(transporte.active).toBe(false);
+    expect(transporte.children[0].id).toBe(child.body.id);
+    expect(transporte.children[0].active).toBe(false);
   });
 
   it('rejects depth greater than 5', async () => {
@@ -360,6 +378,86 @@ describe('Categories HTTP', () => {
       .get('/api/categories')
       .set('Cookie', authCookie)
       .expect(200);
-    expect(tree.body).toHaveLength(0);
+    const expenseRoots = tree.body.filter(
+      (n: { kind: string }) => n.kind === 'EXPENSE',
+    );
+    expect(expenseRoots).toHaveLength(0);
+    expect(
+      tree.body.some((n: { name: string }) => n.name === 'Foreign'),
+    ).toBe(false);
+  });
+
+  it('GET /api/categories always provisions system NON_EXPENSE tree', async () => {
+    const tree = await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    const root = tree.body.find(
+      (n: { systemKey: string | null }) => n.systemKey === 'NON_EXPENSE_ROOT',
+    );
+    expect(root).toMatchObject({
+      name: 'Não-despesa',
+      kind: 'NON_EXPENSE',
+      systemKey: 'NON_EXPENSE_ROOT',
+    });
+    const leafKeys = (root.children ?? []).map(
+      (c: { systemKey: string }) => c.systemKey,
+    );
+    expect(leafKeys.sort()).toEqual(
+      ['ACCOUNT_TRANSFER', 'INVESTMENT', 'INVOICE_PAYMENT'].sort(),
+    );
+  });
+
+  it('rejects creating NON_EXPENSE root or children under system root', async () => {
+    await request(app.getHttpServer())
+      .post('/api/categories')
+      .set('Cookie', authCookie)
+      .send({
+        name: 'Outra não-despesa',
+        kind: 'NON_EXPENSE',
+        color: '#718096',
+        icon: 'arrows',
+      })
+      .expect(400);
+
+    const tree = await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+    const root = tree.body.find(
+      (n: { systemKey: string | null }) => n.systemKey === 'NON_EXPENSE_ROOT',
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/categories')
+      .set('Cookie', authCookie)
+      .send({ name: 'Extra', parentId: root.id })
+      .expect(400);
+  });
+
+  it('rejects deactivating or renaming system categories', async () => {
+    const tree = await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+    const root = tree.body.find(
+      (n: { systemKey: string | null }) => n.systemKey === 'NON_EXPENSE_ROOT',
+    );
+    const transfer = root.children.find(
+      (c: { systemKey: string }) => c.systemKey === 'ACCOUNT_TRANSFER',
+    );
+
+    await request(app.getHttpServer())
+      .patch(`/api/categories/${transfer.id}`)
+      .set('Cookie', authCookie)
+      .send({ active: false })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch(`/api/categories/${transfer.id}`)
+      .set('Cookie', authCookie)
+      .send({ name: 'Outro nome' })
+      .expect(400);
   });
 });

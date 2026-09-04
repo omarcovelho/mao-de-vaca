@@ -372,7 +372,6 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 - Multi-moeda
 - Multitenant ativo (cadastro de usuários)
 - Fila assíncrona para importações grandes
-- Vínculo manual de transferências entre contas (duas pernas em extratos distintos)
 
 ---
 

@@ -10,11 +10,14 @@ import {
   TransactionType,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SYSTEM_CATEGORY_KEYS } from '../categories/system-categories';
 import {
   ListTransactionsQuery,
   ListTransactionsResponse,
   RegimeApi,
   TransactionItemResponse,
+  TransferCandidatesQuery,
+  TransferCandidatesResponse,
   UpdateTransactionDto,
 } from './transactions.types';
 
@@ -27,6 +30,7 @@ type TransactionRow = Transaction & {
     color: string;
     icon: string;
     kind: CategoryKind;
+    systemKey: string | null;
   };
   account: {
     id: string;
@@ -39,6 +43,8 @@ type TransactionRow = Transaction & {
     bank: { id: string; name: string };
   } | null;
   invoicePaymentLink: { invoiceId: string } | null;
+  transferDebitLink: { creditTransactionId: string } | null;
+  transferCreditLink: { debitTransactionId: string } | null;
 };
 
 const originInclude = {
@@ -47,6 +53,24 @@ const originInclude = {
     label: true,
     bank: { select: { id: true, name: true } },
   },
+} as const;
+
+const transactionInclude = {
+  category: {
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      icon: true,
+      kind: true,
+      systemKey: true,
+    },
+  },
+  account: originInclude,
+  card: originInclude,
+  invoicePaymentLink: { select: { invoiceId: true } },
+  transferDebitLink: { select: { creditTransactionId: true } },
+  transferCreditLink: { select: { debitTransactionId: true } },
 } as const;
 
 @Injectable()
@@ -106,20 +130,7 @@ export class TransactionsService {
           lte: new Date(to),
         },
       },
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            icon: true,
-            kind: true,
-          },
-        },
-        account: originInclude,
-        card: originInclude,
-        invoicePaymentLink: { select: { invoiceId: true } },
-      },
+      include: transactionInclude,
       orderBy: [{ [dateField]: 'desc' }, { createdAt: 'desc' }],
     });
 
@@ -131,6 +142,86 @@ export class TransactionsService {
     };
   }
 
+  async listTransferCandidates(
+    userId: string,
+    query: TransferCandidatesQuery,
+  ): Promise<TransferCandidatesResponse> {
+    const transactionId = query.transactionId?.trim();
+    if (!transactionId) {
+      throw new BadRequestException('transactionId é obrigatório');
+    }
+
+    const source = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, userId, active: true },
+    });
+    if (!source) {
+      throw new NotFoundException('Lançamento não encontrado');
+    }
+    if (!source.accountId) {
+      throw new BadRequestException(
+        'Transferência entre contas exige lançamento de conta',
+      );
+    }
+
+    const amountFilter = query.amount?.trim();
+    let absAmount = Math.abs(Number(source.amount));
+    if (amountFilter) {
+      const normalized = Number(amountFilter.replace(',', '.'));
+      if (!Number.isFinite(normalized) || normalized === 0) {
+        throw new BadRequestException('amount inválido');
+      }
+      absAmount = Math.abs(normalized);
+    }
+
+    const sourceAmount = Number(source.amount);
+    const oppositeSign = sourceAmount < 0 ? 'gt' : 'lt';
+
+    const candidates = await this.prisma.transaction.findMany({
+      where: {
+        userId,
+        active: true,
+        id: { not: source.id },
+        accountId: { not: null },
+        cardId: null,
+        type: { in: [TransactionType.EXPENSE, TransactionType.INCOME] },
+        invoicePaymentLink: null,
+        transferDebitLink: null,
+        transferCreditLink: null,
+        amount: {
+          [oppositeSign]: 0,
+        },
+      },
+      include: transactionInclude,
+      orderBy: [{ competenceDate: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    });
+
+    const matched = candidates
+      .filter(
+        (row) => Math.abs(Math.abs(Number(row.amount)) - absAmount) < 0.001,
+      )
+      .sort((a, b) => {
+        const aSameAccount = a.accountId === source.accountId ? 1 : 0;
+        const bSameAccount = b.accountId === source.accountId ? 1 : 0;
+        if (aSameAccount !== bSameAccount) {
+          return aSameAccount - bSameAccount;
+        }
+        const aDiff = Math.abs(
+          a.competenceDate.getTime() - source.competenceDate.getTime(),
+        );
+        const bDiff = Math.abs(
+          b.competenceDate.getTime() - source.competenceDate.getTime(),
+        );
+        return aDiff - bDiff;
+      });
+
+    return {
+      items: matched.map((row) =>
+        this.toItem(row as TransactionRow, 'competence'),
+      ),
+    };
+  }
+
   async update(
     userId: string,
     id: string,
@@ -138,60 +229,70 @@ export class TransactionsService {
   ): Promise<TransactionItemResponse> {
     const existing = await this.prisma.transaction.findFirst({
       where: { id, userId },
+      include: {
+        transferDebitLink: {
+          select: { id: true, creditTransactionId: true },
+        },
+        transferCreditLink: {
+          select: { id: true, debitTransactionId: true },
+        },
+        invoicePaymentLink: { select: { id: true } },
+      },
     });
     if (!existing) {
       throw new NotFoundException('Lançamento não encontrado');
     }
-
-    const data: Prisma.TransactionUpdateInput = {};
 
     if (dto.categoryId !== undefined) {
       const categoryId = dto.categoryId.trim();
       if (!categoryId) {
         throw new BadRequestException('Categoria inválida');
       }
-      await this.assertAssignableLeaf(userId, categoryId, existing.type);
-      data.category = { connect: { id: categoryId } };
+      return this.updateCategory(
+        userId,
+        existing,
+        categoryId,
+        dto.counterpartTransactionId?.trim(),
+      );
     }
 
     if (dto.active !== undefined) {
       if (typeof dto.active !== 'boolean') {
         throw new BadRequestException('active deve ser boolean');
       }
-      data.active = dto.active;
+      const updated = await this.prisma.transaction.update({
+        where: { id },
+        data: { active: dto.active },
+        include: transactionInclude,
+      });
+      return this.toItem(updated as TransactionRow, 'competence');
     }
 
-    if (Object.keys(data).length === 0) {
-      throw new BadRequestException('Nada para atualizar');
-    }
-
-    const updated = await this.prisma.transaction.update({
-      where: { id },
-      data,
-      include: {
-        category: {
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            icon: true,
-            kind: true,
-          },
-        },
-        account: originInclude,
-        card: originInclude,
-        invoicePaymentLink: { select: { invoiceId: true } },
-      },
-    });
-
-    return this.toItem(updated as TransactionRow, 'competence');
+    throw new BadRequestException('Nada para atualizar');
   }
 
-  private async assertAssignableLeaf(
+  private async updateCategory(
     userId: string,
+    existing: Transaction & {
+      transferDebitLink: {
+        id: string;
+        creditTransactionId: string;
+      } | null;
+      transferCreditLink: {
+        id: string;
+        debitTransactionId: string;
+      } | null;
+      invoicePaymentLink: { id: string } | null;
+    },
     categoryId: string,
-    type: TransactionType,
-  ): Promise<void> {
+    counterpartTransactionId?: string,
+  ): Promise<TransactionItemResponse> {
+    if (existing.invoicePaymentLink) {
+      throw new BadRequestException(
+        'Pagamento de fatura não pode ser reclassificado por aqui',
+      );
+    }
+
     const category = await this.prisma.category.findFirst({
       where: { id: categoryId, userId, active: true },
       include: { _count: { select: { children: true } } },
@@ -204,16 +305,274 @@ export class TransactionsService {
         'Lançamento deve referenciar uma categoria folha',
       );
     }
-    if (type === TransactionType.EXPENSE && category.kind !== CategoryKind.EXPENSE) {
+
+    if (category.kind === CategoryKind.NON_EXPENSE) {
+      if (category.systemKey === SYSTEM_CATEGORY_KEYS.INVOICE_PAYMENT) {
+        throw new BadRequestException(
+          'Pagamento de fatura só pode ser classificado pelo vínculo na fatura',
+        );
+      }
+      if (category.systemKey === SYSTEM_CATEGORY_KEYS.ACCOUNT_TRANSFER) {
+        if (!counterpartTransactionId) {
+          throw new BadRequestException(
+            'Informe o lançamento correspondente da transferência',
+          );
+        }
+        return this.linkAccountTransfer(
+          userId,
+          existing,
+          category.id,
+          counterpartTransactionId,
+        );
+      }
+      if (category.systemKey === SYSTEM_CATEGORY_KEYS.INVESTMENT) {
+        return this.applyCategoryToLinkedPair(existing, {
+          categoryId: category.id,
+          typeMode: 'fixed',
+          type: TransactionType.TRANSFER,
+        });
+      }
+      throw new BadRequestException('Categoria Não-despesa inválida');
+    }
+
+    if (category.kind === CategoryKind.EXPENSE) {
+      return this.applyCategoryToLinkedPair(existing, {
+        categoryId: category.id,
+        typeMode: 'by_sign',
+      });
+    }
+
+    if (category.kind === CategoryKind.INCOME) {
+      return this.applyCategoryToLinkedPair(existing, {
+        categoryId: category.id,
+        typeMode: 'by_sign',
+      });
+    }
+
+    throw new BadRequestException('Categoria incompatível');
+  }
+
+  private counterpartIdFromLink(
+    existing: Transaction & {
+      transferDebitLink: {
+        id: string;
+        creditTransactionId: string;
+      } | null;
+      transferCreditLink: {
+        id: string;
+        debitTransactionId: string;
+      } | null;
+    },
+  ): string | null {
+    return (
+      existing.transferDebitLink?.creditTransactionId ??
+      existing.transferCreditLink?.debitTransactionId ??
+      null
+    );
+  }
+
+  private typeFromAmountSign(amount: Prisma.Decimal | number): TransactionType {
+    return Number(amount) < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
+  }
+
+  private async applyCategoryToLinkedPair(
+    existing: Transaction & {
+      transferDebitLink: {
+        id: string;
+        creditTransactionId: string;
+      } | null;
+      transferCreditLink: {
+        id: string;
+        debitTransactionId: string;
+      } | null;
+    },
+    data:
+      | {
+          categoryId: string;
+          typeMode: 'fixed';
+          type: TransactionType;
+        }
+      | {
+          categoryId: string;
+          typeMode: 'by_sign';
+        },
+  ): Promise<TransactionItemResponse> {
+    const counterpartId = this.counterpartIdFromLink(existing);
+    const linkId =
+      existing.transferDebitLink?.id ?? existing.transferCreditLink?.id;
+
+    const sourceType =
+      data.typeMode === 'fixed'
+        ? data.type
+        : this.typeFromAmountSign(existing.amount);
+
+    let counterpartAmount: Prisma.Decimal | number | null = null;
+    if (counterpartId) {
+      const counterpart = await this.prisma.transaction.findFirst({
+        where: { id: counterpartId },
+        select: { amount: true },
+      });
+      counterpartAmount = counterpart?.amount ?? null;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (linkId) {
+        await tx.transferLink.delete({ where: { id: linkId } });
+      }
+      await tx.transaction.update({
+        where: { id: existing.id },
+        data: {
+          categoryId: data.categoryId,
+          type: sourceType,
+        },
+      });
+      if (counterpartId && counterpartAmount !== null) {
+        await tx.transaction.update({
+          where: { id: counterpartId },
+          data: {
+            categoryId: data.categoryId,
+            type:
+              data.typeMode === 'fixed'
+                ? data.type
+                : this.typeFromAmountSign(counterpartAmount),
+          },
+        });
+      }
+    });
+
+    const updated = await this.prisma.transaction.findFirstOrThrow({
+      where: { id: existing.id },
+      include: transactionInclude,
+    });
+    return this.toItem(updated as TransactionRow, 'competence');
+  }
+
+  private async linkAccountTransfer(
+    userId: string,
+    source: Transaction & {
+      transferDebitLink: {
+        id: string;
+        creditTransactionId: string;
+      } | null;
+      transferCreditLink: {
+        id: string;
+        debitTransactionId: string;
+      } | null;
+    },
+    transferCategoryId: string,
+    counterpartId: string,
+  ): Promise<TransactionItemResponse> {
+    if (source.transferDebitLink || source.transferCreditLink) {
+      await this.clearTransferLink(source);
+      source = {
+        ...source,
+        transferDebitLink: null,
+        transferCreditLink: null,
+      };
+    }
+    if (!source.accountId || source.cardId) {
       throw new BadRequestException(
-        'Categoria incompatível com o tipo do lançamento',
+        'Transferência entre contas exige lançamento de conta',
       );
     }
-    if (type === TransactionType.INCOME && category.kind !== CategoryKind.INCOME) {
+
+    const counterpart = await this.prisma.transaction.findFirst({
+      where: { id: counterpartId, userId },
+      include: {
+        transferDebitLink: true,
+        transferCreditLink: true,
+        invoicePaymentLink: true,
+      },
+    });
+    if (!counterpart) {
+      throw new BadRequestException('Lançamento correspondente não encontrado');
+    }
+    if (!counterpart.active) {
+      throw new BadRequestException('Lançamento correspondente inativo');
+    }
+    if (!counterpart.accountId || counterpart.cardId) {
       throw new BadRequestException(
-        'Categoria incompatível com o tipo do lançamento',
+        'Correspondente deve ser um lançamento de conta',
       );
     }
+    if (counterpart.accountId === source.accountId) {
+      throw new BadRequestException(
+        'Transferência deve vincular contas distintas',
+      );
+    }
+    if (counterpart.invoicePaymentLink) {
+      throw new BadRequestException(
+        'Correspondente já está vinculado a uma fatura',
+      );
+    }
+    if (counterpart.transferDebitLink || counterpart.transferCreditLink) {
+      throw new BadRequestException(
+        'Correspondente já possui vínculo de transferência',
+      );
+    }
+
+    const sourceAmount = Number(source.amount);
+    const counterpartAmount = Number(counterpart.amount);
+    if (sourceAmount === 0 || counterpartAmount === 0) {
+      throw new BadRequestException('Valor inválido para transferência');
+    }
+    if (Math.sign(sourceAmount) === Math.sign(counterpartAmount)) {
+      throw new BadRequestException(
+        'Lançamentos da transferência devem ter sinais opostos',
+      );
+    }
+    if (Math.abs(Math.abs(sourceAmount) - Math.abs(counterpartAmount)) > 0.001) {
+      throw new BadRequestException(
+        'Valores absolutos da transferência devem ser iguais',
+      );
+    }
+
+    const debit = sourceAmount < 0 ? source : counterpart;
+    const credit = sourceAmount < 0 ? counterpart : source;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.transaction.update({
+        where: { id: debit.id },
+        data: {
+          categoryId: transferCategoryId,
+          type: TransactionType.TRANSFER,
+        },
+      });
+      await tx.transaction.update({
+        where: { id: credit.id },
+        data: {
+          categoryId: transferCategoryId,
+          type: TransactionType.TRANSFER,
+        },
+      });
+      await tx.transferLink.create({
+        data: {
+          userId,
+          debitTransactionId: debit.id,
+          creditTransactionId: credit.id,
+        },
+      });
+    });
+
+    const updated = await this.prisma.transaction.findFirstOrThrow({
+      where: { id: source.id },
+      include: transactionInclude,
+    });
+    return this.toItem(updated as TransactionRow, 'competence');
+  }
+
+  private async clearTransferLink(
+    existing: Transaction & {
+      transferDebitLink: { id: string } | null;
+      transferCreditLink: { id: string } | null;
+    },
+  ): Promise<void> {
+    const linkId =
+      existing.transferDebitLink?.id ?? existing.transferCreditLink?.id;
+    if (!linkId) {
+      return;
+    }
+    await this.prisma.transferLink.delete({ where: { id: linkId } });
   }
 
   private parseRegime(value?: string): RegimeApi {
@@ -236,6 +595,10 @@ export class TransactionsService {
   ): TransactionItemResponse {
     const competenceDate = this.toIsoDate(row.competenceDate);
     const cashDate = row.cashDate ? this.toIsoDate(row.cashDate) : null;
+    const transferCounterpartId =
+      row.transferDebitLink?.creditTransactionId ??
+      row.transferCreditLink?.debitTransactionId ??
+      null;
     return {
       id: row.id,
       description: row.description,
@@ -252,6 +615,7 @@ export class TransactionsService {
         color: row.category.color,
         icon: row.category.icon,
         kind: row.category.kind,
+        systemKey: row.category.systemKey,
       },
       account: row.account
         ? {
@@ -274,6 +638,7 @@ export class TransactionsService {
           }
         : null,
       invoiceId: row.invoiceId ?? row.invoicePaymentLink?.invoiceId ?? null,
+      transferCounterpartId,
     };
   }
 }

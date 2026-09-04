@@ -1,25 +1,31 @@
-# Fixtures — Mão de Vaca (V6)
+# Fixtures — set/2026 (Não-despesa + transferências)
 
-CSVs de exemplo para testar importação de conta, fatura e vínculo de pagamento.
+CSVs do **mês corrente (set/2026)** para testar:
+
+1. Transferência entre contas (vínculo manual)
+2. Aplicação / resgate (reclassificação sem vínculo)
+3. Pagamento de fatura (categoria automática no vínculo)
+
+Todas as linhas usam categorias **EXPENSE/INCOME** do seed (`A revisar`, `Salário`, etc.). Categorias `Não-despesa` **não** vêm do CSV — só na UI.
 
 ## Arquivos
 
-| Arquivo | Uso |
-|---------|-----|
-| `fatura-cartao-mes.csv` | Import modo **fatura** (cartão + fatura Ago/2026). Total líquido **R$ 590,15** (compras − estorno). Sem linhas de pagamento. |
-| `extrato-conta-corrente.csv` | Import modo **transações** (conta). Inclui débito `Pagamento fatura cartão ago` de **-590,15** em 10/09/2026. |
-| `extrato-conta-pagamento-parcial.csv` | Alternativa: dois débitos (-200 + -390,15) para demo de pagamento **parcial** → **quitada**. |
+| Arquivo | Destino | Destaques |
+|---------|---------|-----------|
+| `2026-09-conta-corrente.csv` | Conta corrente (modo transações) | PIX **-1.200** (05/09); Aplicação CDB **-2.000** (08/09); Pagamento fatura **-590,15** (10/09) |
+| `2026-09-conta-poupanca.csv` | Conta poupança | PIX **+1.200** (05/09); Resgate CDB **+500** (15/09) |
+| `2026-09-fatura-cartao.csv` | Cartão, fatura **Ago/2026** (venc. 10/09) | Total líquido **-590,15** (igual ao débito de pagamento) |
 
-Parser padrão: colunas `data,descricao,valor,categoria` (ou aliases aceitos pelo parser).
+Fixtures V6 antigas (`extrato-conta-corrente.csv`, `fatura-cartao-mes.csv`, …) permanecem como referência legada.
 
-## Roteiro rápido
+## Roteiro
 
-1. Cadastre Conta e Cartão (e use as categorias do seed).
-2. Em Cartões → crie fatura **Ago/2026** com vencimento **2026-09-10**.
-3. Importe `fatura-cartao-mes.csv` no modo fatura (cartão + fatura). Status **Aberta**, saldo ≈ **-590,15**.
-4. Importe `extrato-conta-corrente.csv` no modo transações (conta).
-5. Abra a fatura → **Vincular pagamento** → selecione o débito de R$ 590,15 → confirmar → **Quitada**.
-6. Em `/lancamentos`, toggle **caixa** no mês **setembro/2026**: compras do cartão aparecem na data do pagamento.
-7. Clique no pagamento (origem conta) → abre `/cartoes?invoiceId=…`.
+1. Seed / login; cadastre **Conta corrente**, **Conta poupança** e **Cartão**.
+2. Em Cartões → crie fatura **Ago/2026**, vencimento **2026-09-10**.
+3. Importe `2026-09-fatura-cartao.csv` (modo fatura → cartão + fatura).
+4. Importe `2026-09-conta-corrente.csv` na corrente e `2026-09-conta-poupanca.csv` na poupança.
+5. **Transferência:** `/lancamentos` (set/2026) → altere categoria do PIX -1.200 para **Transferências entre contas** → no modal, busque por valor e vincule o +1.200. Ambos viram `TRANSFER` e saem dos relatórios.
+6. **Investimento:** classifique Aplicação -2.000 e Resgate +500 como **Aplicações/resgates** (sem vínculo). Continuam em lançamentos; fora dos totais.
+7. **Pagamento:** fatura → Vincular pagamento → débito -590,15 → tipo `INVOICE_PAYMENT` e categoria **Pagamento de fatura** automáticos; fatura quitada.
 
-Para parcial: importe `extrato-conta-pagamento-parcial.csv` no lugar do extrato completo (ou só os débitos de pagamento) e vincule primeiro o de R$ 200 (status **Parcial**), depois o restante.
+Parser padrão: `data,descricao,valor,categoria` (aliases aceitos).

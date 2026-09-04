@@ -255,6 +255,8 @@ describe('Reports UI flow', () => {
                 color: '#2d6a4f',
                 icon: 'utensils',
                 kind: 'EXPENSE',
+
+              systemKey: null,
               },
               account: {
                 id: 'a1',
@@ -263,6 +265,7 @@ describe('Reports UI flow', () => {
               },
               card: null,
               invoiceId: null,
+            transferCounterpartId: null,
             },
           ],
         });
@@ -530,6 +533,7 @@ describe('Reports UI flow', () => {
             parentId: null,
             name: 'Alimentação',
             kind: 'EXPENSE',
+            systemKey: null,
             color: '#2d6a4f',
             icon: 'utensils',
             active: true,

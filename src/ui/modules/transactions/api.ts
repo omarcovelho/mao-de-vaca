@@ -2,6 +2,7 @@ import type {
   ListTransactionsParams,
   ListTransactionsResponse,
   TransactionItem,
+  TransferCandidatesResponse,
   UpdateTransactionInput,
 } from './types';
 
@@ -59,4 +60,23 @@ export async function updateTransaction(
     throw new Error(message || 'Falha ao atualizar lançamento');
   }
   return response.json() as Promise<TransactionItem>;
+}
+
+export async function listTransferCandidates(params: {
+  transactionId: string;
+  amount?: string;
+}): Promise<TransferCandidatesResponse> {
+  const query = new URLSearchParams({
+    transactionId: params.transactionId,
+  });
+  if (params.amount) {
+    query.set('amount', params.amount);
+  }
+  const response = await apiFetch(
+    `/api/transactions/transfer-candidates?${query.toString()}`,
+  );
+  if (!response.ok) {
+    throw new Error('Falha ao buscar lançamentos para vínculo');
+  }
+  return response.json() as Promise<TransferCandidatesResponse>;
 }

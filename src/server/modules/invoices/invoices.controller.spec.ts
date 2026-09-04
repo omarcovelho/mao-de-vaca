@@ -78,6 +78,7 @@ describe('Invoices HTTP', () => {
   let accountId: string;
 
   beforeEach(async () => {
+    await prisma.transferLink.deleteMany({ where: { userId } });
     await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
@@ -109,6 +110,7 @@ describe('Invoices HTTP', () => {
   });
 
   afterAll(async () => {
+    await prisma.transferLink.deleteMany({ where: { userId } });
     await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
@@ -427,8 +429,11 @@ describe('Invoices HTTP', () => {
 
     const updatedPayment = await prisma.transaction.findUniqueOrThrow({
       where: { id: payment.id },
+      include: { category: true },
     });
     expect(updatedPayment.type).toBe(TransactionType.INVOICE_PAYMENT);
+    expect(updatedPayment.category.systemKey).toBe('INVOICE_PAYMENT');
+    expect(updatedPayment.category.name).toBe('Pagamento de fatura');
 
     const purchases = await prisma.transaction.findMany({
       where: { id: { in: purchaseIds } },

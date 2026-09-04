@@ -126,17 +126,22 @@ const CATEGORY_SEED = [
     icon: 'wallet',
     children: ['Transferências PJ', 'Salário'],
   },
-  {
+];
+
+/** System NON_EXPENSE tree — provisioned via ensureSystemCategories */
+const SYSTEM_NON_EXPENSE = {
+  root: {
+    systemKey: 'NON_EXPENSE_ROOT',
     name: 'Não-despesa',
     kind: 'NON_EXPENSE',
     color: '#718096',
     icon: 'arrows',
-    children: [
-      'Pagamento de fatura',
-      'Transferências entre contas',
-      'Aplicações/resgates',
-    ],
   },
-];
+  leaves: [
+    { systemKey: 'INVOICE_PAYMENT', name: 'Pagamento de fatura' },
+    { systemKey: 'ACCOUNT_TRANSFER', name: 'Transferências entre contas' },
+    { systemKey: 'INVESTMENT', name: 'Aplicações/resgates' },
+  ],
+};
 
-module.exports = { CATEGORY_SEED };
+module.exports = { CATEGORY_SEED, SYSTEM_NON_EXPENSE };

@@ -49,7 +49,7 @@ describe('standard CSV parser', () => {
     });
   });
 
-  it('marks tipo=transferencia as TRANSFER without changing the sign', () => {
+  it('ignores tipo=transferencia and keeps sign-based EXPENSE/INCOME', () => {
     const result = parseStandardCsv(
       csv(`data,descricao,valor,categoria,tipo
 2026-01-16,PIX para Nubank,-1000.00,Transferência,transferencia
@@ -59,11 +59,11 @@ describe('standard CSV parser', () => {
 
     expect(result.errors).toEqual([]);
     expect(result.transactions[0]).toMatchObject({
-      type: 'TRANSFER',
+      type: 'EXPENSE',
       amount: '-1000.00',
     });
     expect(result.transactions[1]).toMatchObject({
-      type: 'TRANSFER',
+      type: 'INCOME',
       amount: '1000.00',
     });
   });

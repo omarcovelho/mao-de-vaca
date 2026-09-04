@@ -1,6 +1,9 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
-const { CATEGORY_SEED } = require('./category-seed-data');
+const {
+  CATEGORY_SEED,
+  SYSTEM_NON_EXPENSE,
+} = require('./category-seed-data');
 
 const prisma = new PrismaClient();
 
@@ -14,6 +17,68 @@ async function findSibling(userId, parentId, name) {
       parentId: parentId === null ? null : parentId,
     },
   });
+}
+
+async function ensureSystemCategories(userId) {
+  const rootDef = SYSTEM_NON_EXPENSE.root;
+  let root = await prisma.category.findFirst({
+    where: { userId, systemKey: rootDef.systemKey },
+  });
+  if (!root) {
+    root = await prisma.category.create({
+      data: {
+        userId,
+        parentId: null,
+        name: rootDef.name,
+        kind: rootDef.kind,
+        color: rootDef.color,
+        icon: rootDef.icon,
+        systemKey: rootDef.systemKey,
+      },
+    });
+  } else {
+    root = await prisma.category.update({
+      where: { id: root.id },
+      data: {
+        name: rootDef.name,
+        kind: rootDef.kind,
+        color: rootDef.color,
+        icon: rootDef.icon,
+        active: true,
+      },
+    });
+  }
+
+  for (const leaf of SYSTEM_NON_EXPENSE.leaves) {
+    const existing = await prisma.category.findFirst({
+      where: { userId, systemKey: leaf.systemKey },
+    });
+    if (!existing) {
+      await prisma.category.create({
+        data: {
+          userId,
+          parentId: root.id,
+          name: leaf.name,
+          kind: rootDef.kind,
+          color: rootDef.color,
+          icon: rootDef.icon,
+          systemKey: leaf.systemKey,
+        },
+      });
+    } else {
+      await prisma.category.update({
+        where: { id: existing.id },
+        data: {
+          parentId: root.id,
+          name: leaf.name,
+          kind: rootDef.kind,
+          color: rootDef.color,
+          icon: rootDef.icon,
+          active: true,
+        },
+      });
+    }
+  }
 }
 
 async function seedCategoriesForUser(userId) {
@@ -68,6 +133,8 @@ async function seedCategoriesForUser(userId) {
       }
     }
   }
+
+  await ensureSystemCategories(userId);
 }
 
 async function main() {

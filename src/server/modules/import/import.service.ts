@@ -58,6 +58,13 @@ function flattenLeaves(nodes: CategoryResponse[]): CategoryResponse[] {
   return leaves;
 }
 
+/** Import mapping only allows EXPENSE/INCOME leaves — never NON_EXPENSE. */
+function importableLeaves(nodes: CategoryResponse[]): CategoryResponse[] {
+  return flattenLeaves(nodes).filter(
+    (leaf) => leaf.kind === 'EXPENSE' || leaf.kind === 'INCOME',
+  );
+}
+
 function leafByName(
   leaves: CategoryResponse[],
   name: string,
@@ -182,7 +189,7 @@ export class ImportService {
   ) {
     const upload = await this.parseUpload(userId, fields, file);
     const tree = await this.categoriesService.list(userId, false);
-    const leaves = flattenLeaves(tree);
+    const leaves = importableLeaves(tree);
     const unknown = new Set<string>();
     const rows: PreviewRow[] = upload.parsed.errors.map((error) => ({
       line: error.line,
@@ -291,7 +298,7 @@ export class ImportService {
     const selectedSet = new Set(selectedLines);
     const mappings = parseCategoryMappings(fields.categoryMappings);
     const tree = await this.categoriesService.list(userId, false);
-    const leaves = flattenLeaves(tree);
+    const leaves = importableLeaves(tree);
     const categoryIds = new Map<string, string>();
 
     const uniqueCsvNames = [
@@ -314,7 +321,7 @@ export class ImportService {
       const created = leaves.find((leaf) => leaf.id === resolved);
       if (!created) {
         const refreshed = await this.categoriesService.list(userId, false);
-        leaves.splice(0, leaves.length, ...flattenLeaves(refreshed));
+        leaves.splice(0, leaves.length, ...importableLeaves(refreshed));
       }
     }
 
@@ -619,6 +626,11 @@ export class ImportService {
       if (!leaf) {
         throw new BadRequestException('Categoria mapeada inválida');
       }
+      if (leaf.kind === 'NON_EXPENSE') {
+        throw new BadRequestException(
+          'Categorias Não-despesa não podem ser usadas na importação',
+        );
+      }
       return leaf.id;
     }
 
@@ -656,7 +668,7 @@ export class ImportService {
       return created.id;
     } catch (error) {
       if (error instanceof ConflictException) {
-        const refreshed = flattenLeaves(
+        const refreshed = importableLeaves(
           await this.categoriesService.list(userId, false),
         );
         leaves.splice(0, leaves.length, ...refreshed);
@@ -684,13 +696,21 @@ export class ImportService {
         ? null
         : new Date(`${row.cashDate}T00:00:00.000Z`);
 
+    const isNegative = row.amount.startsWith('-');
+    const type: TransactionType =
+      upload.importMode === 'invoice'
+        ? TransactionType.EXPENSE
+        : isNegative
+          ? TransactionType.EXPENSE
+          : TransactionType.INCOME;
+
     return {
       userId,
       competenceDate: new Date(`${row.competenceDate}T00:00:00.000Z`),
       cashDate,
       description: row.description,
       amount: new Prisma.Decimal(row.amount),
-      type: row.type as TransactionType,
+      type,
       categoryId,
       accountId: upload.accountId,
       cardId: upload.cardId,

@@ -639,8 +639,8 @@ describe('Import HTTP', () => {
   });
 
   it('DELETE /api/imports/:id rejects batches that contain transfers', async () => {
-    const transferCsv = `data,descricao,valor,categoria,tipo
-2026-03-01,PIX para poupança,-500.00,Alimentação,transferência
+    const transferCsv = `data,descricao,valor,categoria
+2026-03-01,PIX para poupança,-500.00,Alimentação
 `;
     const confirmed = await request(app.getHttpServer())
       .post('/api/imports/confirm')
@@ -653,6 +653,11 @@ describe('Import HTTP', () => {
       .attach('file', Buffer.from(transferCsv), 'transfer.csv')
       .expect(200);
 
+    await prisma.transaction.updateMany({
+      where: { importBatchId: confirmed.body.id },
+      data: { type: 'TRANSFER' },
+    });
+
     const response = await request(app.getHttpServer())
       .delete(`/api/imports/${confirmed.body.id}`)
       .set('Cookie', authCookie)
@@ -661,6 +666,60 @@ describe('Import HTTP', () => {
     expect(response.body.message).toMatch(/transferências/i);
     expect(await prisma.transaction.count({ where: { userId } })).toBe(1);
     expect(await prisma.importBatch.count({ where: { userId } })).toBe(1);
+  });
+
+  it('preview does not auto-match NON_EXPENSE category names', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    const csv = `data,descricao,valor,categoria
+2026-09-05,PIX para poupança,-1200.00,Transferências entre contas
+`;
+    const preview = await request(app.getHttpServer())
+      .post('/api/imports/preview')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .attach('file', Buffer.from(csv), 'non-expense.csv')
+      .expect(200);
+
+    expect(preview.body.unknownCategories).toContain(
+      'Transferências entre contas',
+    );
+    expect(preview.body.rows[0].categoryId).toBeNull();
+    expect(preview.body.rows[0].type).toBe('EXPENSE');
+  });
+
+  it('confirm rejects mapping to NON_EXPENSE categoryId', async () => {
+    await request(app.getHttpServer())
+      .get('/api/categories')
+      .set('Cookie', authCookie)
+      .expect(200);
+    const transferCat = await prisma.category.findFirstOrThrow({
+      where: { userId, systemKey: 'ACCOUNT_TRANSFER' },
+    });
+
+    const csv = `data,descricao,valor,categoria
+2026-09-05,PIX,-1200.00,Pix avulso
+`;
+    const response = await request(app.getHttpServer())
+      .post('/api/imports/confirm')
+      .set('Cookie', authCookie)
+      .field('importMode', 'transactions')
+      .field('accountId', accountId)
+      .field('parserId', 'standard')
+      .field(
+        'categoryMappings',
+        JSON.stringify({ 'Pix avulso': transferCat.id }),
+      )
+      .field('selectedLines', JSON.stringify([2]))
+      .attach('file', Buffer.from(csv), 'force-non-expense.csv')
+      .expect(400);
+
+    expect(response.body.message).toMatch(/Não-despesa|inválida/i);
   });
 
   it('DELETE /api/imports/:id rejects invoice-mode batch when invoice is paid', async () => {

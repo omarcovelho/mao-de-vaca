@@ -20,6 +20,7 @@ model User {
   importBatches       ImportBatch[]
   invoices            Invoice[]
   invoicePaymentLinks InvoicePaymentLink[]
+  transferLinks       TransferLink[]
 }
 
 model Bank {
@@ -84,6 +85,7 @@ model Category {
   kind         CategoryKind
   color        String
   icon         String
+  systemKey    String?
   active       Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -92,6 +94,7 @@ model Category {
   children     Category[]    @relation("CategoryTree")
   transactions Transaction[]
 
+  @@unique([userId, systemKey])
   @@index([userId])
   @@index([userId, parentId])
   @@index([userId, name])
@@ -143,6 +146,19 @@ model InvoicePaymentLink {
   @@index([invoiceId])
 }
 
+model TransferLink {
+  id                   String      @id @default(cuid())
+  userId               String
+  debitTransactionId   String      @unique
+  creditTransactionId  String      @unique
+  createdAt            DateTime    @default(now())
+  user                 User        @relation(fields: [userId], references: [id])
+  debitTransaction     Transaction @relation("TransferDebit", fields: [debitTransactionId], references: [id])
+  creditTransaction    Transaction @relation("TransferCredit", fields: [creditTransactionId], references: [id])
+
+  @@index([userId])
+}
+
 model ImportBatch {
   id           String     @id @default(cuid())
   userId       String
@@ -191,6 +207,8 @@ model Transaction {
   invoice            Invoice?            @relation(fields: [invoiceId], references: [id])
   importBatch        ImportBatch         @relation(fields: [importBatchId], references: [id])
   invoicePaymentLink InvoicePaymentLink?
+  transferDebitLink  TransferLink?       @relation("TransferDebit")
+  transferCreditLink TransferLink?       @relation("TransferCredit")
 
   @@unique([userId, dedupKey])
   @@index([userId])
