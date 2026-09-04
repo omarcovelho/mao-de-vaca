@@ -5,6 +5,10 @@ export type CreateInvoiceDto = {
   dueDate?: string;
 };
 
+export type LinkInvoicePaymentsDto = {
+  transactionIds?: string[];
+};
+
 export type InvoiceResponse = {
   id: string;
   cardId: string;
@@ -19,7 +23,7 @@ export type InvoiceTransactionItem = {
   id: string;
   description: string;
   amount: number;
-  type: 'EXPENSE' | 'INCOME' | 'TRANSFER';
+  type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
   competenceDate: string;
   cashDate: string | null;
   active: boolean;
@@ -32,6 +36,20 @@ export type InvoiceTransactionItem = {
   };
 };
 
+export type InvoicePaymentItem = {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'INVOICE_PAYMENT';
+  competenceDate: string;
+  cashDate: string | null;
+  account: {
+    id: string;
+    label: string;
+    bank: { id: string; name: string };
+  };
+};
+
 export type InvoiceDetailResponse = InvoiceResponse & {
   card: {
     id: string;
@@ -39,4 +57,5 @@ export type InvoiceDetailResponse = InvoiceResponse & {
     bank: { id: string; name: string };
   };
   transactions: InvoiceTransactionItem[];
+  payments: InvoicePaymentItem[];
 };

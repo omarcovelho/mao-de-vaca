@@ -17,6 +17,7 @@ const TYPE_LABELS = {
   EXPENSE: 'Despesa',
   INCOME: 'Receita',
   TRANSFER: 'Transferência',
+  INVOICE_PAYMENT: 'Pagamento de fatura',
 } as const;
 
 type MappingDraft = {

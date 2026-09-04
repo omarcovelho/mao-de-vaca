@@ -55,3 +55,19 @@ export async function createInvoice(
   }
   return response.json() as Promise<Invoice>;
 }
+
+export async function linkPayments(
+  invoiceId: string,
+  transactionIds: string[],
+): Promise<InvoiceDetail> {
+  const response = await jsonFetch(`/api/invoices/${invoiceId}/payments`, {
+    method: 'POST',
+    body: JSON.stringify({ transactionIds }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, 'Não foi possível vincular o pagamento'),
+    );
+  }
+  return response.json() as Promise<InvoiceDetail>;
+}

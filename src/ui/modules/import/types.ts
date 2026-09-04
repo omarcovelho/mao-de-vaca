@@ -36,7 +36,7 @@ export type PreviewRow = {
   cashDate?: string;
   description?: string;
   amount?: string;
-  type?: 'EXPENSE' | 'INCOME' | 'TRANSFER';
+  type?: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
   category?: string;
   categoryId?: string | null;
   error?: string;

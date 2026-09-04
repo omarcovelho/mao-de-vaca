@@ -10,7 +10,7 @@ Este documento descreve *como* o MVP é construído em alto nível. Histórias d
 
 ## 1. Propósito
 
-Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O usuário **primeiro cadastra contas, cartões e categorias**; em seguida importa extratos e faturas em CSV (pré-categorizados externamente), vinculados a essas origens. O diferencial central é permitir enxergar os gastos sob **dois regimes simultâneos** — competência e caixa — com fatura de cartão modelada como **passivo**, pagamentos de fatura como **transferências** (sem contagem duplicada) e entrada de dados exclusivamente pela **interface web**.
+Mão de Vaca é uma aplicação web pessoal de controle de gastos e receitas. O usuário **primeiro cadastra contas, cartões e categorias**; em seguida importa extratos e faturas em CSV (pré-categorizados externamente), vinculados a essas origens. O diferencial central é permitir enxergar os gastos sob **dois regimes simultâneos** — competência e caixa — com fatura de cartão modelada como **passivo**, pagamentos de fatura como tipo **`INVOICE_PAYMENT`** (sem contagem duplicada) e entrada de dados exclusivamente pela **interface web**.
 
 ---
 
@@ -195,10 +195,10 @@ flowchart LR
 
 | Regra | Descrição |
 |-------|-----------|
-| **Saldo de fatura** | V4: `balance = sum(amount)` das txs ativas da fatura (gastos −, estornos +). V6: subtrai pagamentos vinculados (PROJECT_DEFINITION §3.8) |
+| **Saldo de fatura** | `balance = sum(amount)` das txs ativas da fatura − `sum(amount)` dos pagamentos vinculados. Status: `open` / `partial` / `paid` (V6) |
 | **Status de fatura** | Derivado do saldo: em aberto (`balance < 0`) / quitada (`balance === 0`); parcial após V6 |
-| **Totais de gasto/receita** | `saldo = receitas − despesas`; transferências não entram (RN-01) |
-| **Pagamento de fatura** | Sempre transferência; nunca despesa — evita contagem duplicada (RN-02). Não importar do CSV da fatura — vínculo manual na Conta (V6) |
+| **Totais de gasto/receita** | `saldo = receitas − despesas`; `TRANSFER` e `INVOICE_PAYMENT` não entram (RN-01, RN-02) |
+| **Pagamento de fatura** | Sempre tipo `INVOICE_PAYMENT` após vínculo; nunca despesa nas somas — evita contagem duplicada (RN-02). Não importar do CSV da fatura — vínculo manual na Conta (V6). `TRANSFER` reservado para Conta↔Conta (futuro). |
 | **Compra-pai** | Nunca contabilizada; apenas parcelas entram nas somas (RN-03) |
 | **Estorno** | Na fatura: `EXPENSE` com valor positivo no CSV; nunca receita (RN-04) |
 | **Investimento** | Transferência: afeta caixa, não afeta gasto nem receita (RN-05) |
@@ -245,7 +245,7 @@ Todo parser, independentemente de banco ou formato, produz lançamentos neste mo
 | `cashDate` | Data de caixa: no extrato = competência; na fatura = `null` até vínculo de pagamento (V6) |
 | `description` | Descrição do lançamento |
 | `amount` | Valor signed do CSV. **Extrato:** negativo = despesa; positivo = receita. **Fatura:** negativo = gasto; positivo = estorno (ambos `EXPENSE`; nunca `INCOME` — RN-04). Usuário remove linhas de pagamento do CSV antes de importar |
-| `type` | `EXPENSE` \| `INCOME` \| `TRANSFER` (enum persistido; extrato deriva EXPENSE/INCOME do sinal; fatura: sinal → só `EXPENSE`; `TRANSFER` só com coluna opcional `tipo`) |
+| `type` | `EXPENSE` \| `INCOME` \| `TRANSFER` \| `INVOICE_PAYMENT` (enum persistido; extrato deriva EXPENSE/INCOME do sinal; fatura: sinal → só `EXPENSE`; `TRANSFER` via coluna opcional `tipo` / futuro Conta↔Conta; `INVOICE_PAYMENT` ao vincular pagamento à fatura — V6) |
 | `category` | Nome da categoria pré-atribuída no CSV (string do parser; resolvida para `categoryId` na confirmação; opcional no modo fatura → `(sem categoria)`) |
 | `accountId` | Conta cadastrada (modo transações) — mutuamente exclusivo com `cardId` |
 | `cardId` | Cartão cadastrado (modo fatura) |
@@ -351,7 +351,7 @@ sequenceDiagram
 - Preview e confirm são **multipart** (arquivo reenviado no confirm; sem cache de preview)
 - Importação **síncrona** no MVP; sem fila nem SSE
 - `categoryMappings`: `Record<string, categoryId | { create: { name } }>` — chave é o texto do CSV
-- Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-padrao.csv`
+- Parser padrão: CSV com `data`, `descricao`, `valor`, `categoria` (`tipo` opcional); fixture em `docs/fixtures/extrato-conta-corrente.csv`
 - `dedupKey`: SHA-256 de `accountId|competenceDate|amount|descrição normalizada` (único por `userId`)
 - Transferência em dois extratos: dois lançamentos independentes até vínculo manual futuro
 

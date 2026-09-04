@@ -16,9 +16,10 @@ model User {
   accounts      Account[]
   cards         Card[]
   categories    Category[]
-  transactions  Transaction[]
-  importBatches ImportBatch[]
-  invoices      Invoice[]
+  transactions        Transaction[]
+  importBatches       ImportBatch[]
+  invoices            Invoice[]
+  invoicePaymentLinks InvoicePaymentLink[]
 }
 
 model Bank {
@@ -100,6 +101,7 @@ enum TransactionType {
   EXPENSE
   INCOME
   TRANSFER
+  INVOICE_PAYMENT
 }
 
 enum ImportMode {
@@ -119,10 +121,26 @@ model Invoice {
   card           Card           @relation(fields: [cardId], references: [id])
   transactions   Transaction[]
   importBatches  ImportBatch[]
+  paymentLinks   InvoicePaymentLink[]
 
   @@unique([userId, cardId, referenceMonth])
   @@index([userId])
   @@index([cardId])
+}
+
+model InvoicePaymentLink {
+  id            String      @id @default(cuid())
+  userId        String
+  invoiceId     String
+  transactionId String
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id])
+  invoice       Invoice     @relation(fields: [invoiceId], references: [id])
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  @@unique([transactionId])
+  @@index([userId])
+  @@index([invoiceId])
 }
 
 model ImportBatch {
@@ -170,8 +188,9 @@ model Transaction {
   category       Category        @relation(fields: [categoryId], references: [id])
   account        Account?        @relation(fields: [accountId], references: [id])
   card           Card?           @relation(fields: [cardId], references: [id])
-  invoice        Invoice?        @relation(fields: [invoiceId], references: [id])
-  importBatch    ImportBatch     @relation(fields: [importBatchId], references: [id])
+  invoice            Invoice?            @relation(fields: [invoiceId], references: [id])
+  importBatch        ImportBatch         @relation(fields: [importBatchId], references: [id])
+  invoicePaymentLink InvoicePaymentLink?
 
   @@unique([userId, dedupKey])
   @@index([userId])

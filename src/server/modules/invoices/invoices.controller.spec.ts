@@ -75,17 +75,26 @@ describe('Invoices HTTP', () => {
     );
   });
 
+  let accountId: string;
+
   beforeEach(async () => {
+    await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
     await prisma.invoice.deleteMany({ where: { userId } });
     await prisma.category.deleteMany({ where: { userId } });
     await prisma.card.deleteMany({ where: { userId } });
+    await prisma.account.deleteMany({ where: { userId } });
 
     const card = await prisma.card.create({
       data: { userId, bankId, label: 'Nubank Roxinho' },
     });
     cardId = card.id;
+
+    const account = await prisma.account.create({
+      data: { userId, bankId, label: 'Conta Nubank' },
+    });
+    accountId = account.id;
 
     const category = await prisma.category.create({
       data: {
@@ -100,11 +109,13 @@ describe('Invoices HTTP', () => {
   });
 
   afterAll(async () => {
+    await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
     await prisma.invoice.deleteMany({ where: { userId } });
     await prisma.category.deleteMany({ where: { userId } });
     await prisma.card.deleteMany({ where: { userId } });
+    await prisma.account.deleteMany({ where: { userId } });
     await app.close();
   });
 
@@ -303,5 +314,234 @@ describe('Invoices HTTP', () => {
       .get('/api/invoices/does-not-exist')
       .set('Cookie', authCookie)
       .expect(404);
+  });
+
+  async function seedInvoiceWithPurchases(netAmounts: number[]) {
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId,
+        referenceMonth: new Date('2026-08-01T00:00:00.000Z'),
+        dueDate: new Date('2026-09-10T00:00:00.000Z'),
+      },
+    });
+
+    const batch = await prisma.importBatch.create({
+      data: {
+        userId,
+        importMode: ImportMode.INVOICE,
+        cardId,
+        invoiceId: invoice.id,
+        parserId: 'standard',
+        fileName: 'fatura.csv',
+        createdCount: netAmounts.length,
+        skippedCount: 0,
+        errorCount: 0,
+      },
+    });
+
+    const purchaseIds: string[] = [];
+    for (let i = 0; i < netAmounts.length; i += 1) {
+      const tx = await prisma.transaction.create({
+        data: {
+          userId,
+          competenceDate: new Date(`2026-08-${String(10 + i).padStart(2, '0')}T00:00:00.000Z`),
+          cashDate: null,
+          description: `Compra ${i + 1}`,
+          amount: netAmounts[i],
+          type: TransactionType.EXPENSE,
+          categoryId,
+          cardId,
+          invoiceId: invoice.id,
+          importBatchId: batch.id,
+          dedupKey: `purchase-${i}-${Date.now()}`,
+        },
+      });
+      purchaseIds.push(tx.id);
+    }
+
+    return { invoice, purchaseIds, batch };
+  }
+
+  async function seedAccountDebit(input: {
+    amount: number;
+    date: string;
+    dedupKey: string;
+    description?: string;
+  }) {
+    const batch = await prisma.importBatch.create({
+      data: {
+        userId,
+        importMode: ImportMode.TRANSACTIONS,
+        accountId,
+        parserId: 'standard',
+        fileName: 'extrato.csv',
+        createdCount: 1,
+        skippedCount: 0,
+        errorCount: 0,
+      },
+    });
+
+    return prisma.transaction.create({
+      data: {
+        userId,
+        competenceDate: new Date(`${input.date}T00:00:00.000Z`),
+        cashDate: new Date(`${input.date}T00:00:00.000Z`),
+        description: input.description ?? 'Pagamento fatura Nubank',
+        amount: input.amount,
+        type: TransactionType.EXPENSE,
+        categoryId,
+        accountId,
+        importBatchId: batch.id,
+        dedupKey: input.dedupKey,
+      },
+    });
+  }
+
+  it('POST /api/invoices/:id/payments links debit as INVOICE_PAYMENT and quits invoice', async () => {
+    const { invoice, purchaseIds } = await seedInvoiceWithPurchases([-300, -200]);
+    const payment = await seedAccountDebit({
+      amount: -500,
+      date: '2026-09-10',
+      dedupKey: 'pay-full',
+    });
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      id: invoice.id,
+      balance: 0,
+      status: 'paid',
+    });
+    expect(res.body.payments).toHaveLength(1);
+    expect(res.body.payments[0]).toMatchObject({
+      id: payment.id,
+      amount: -500,
+      type: 'INVOICE_PAYMENT',
+      account: { id: accountId, label: 'Conta Nubank' },
+    });
+
+    const updatedPayment = await prisma.transaction.findUniqueOrThrow({
+      where: { id: payment.id },
+    });
+    expect(updatedPayment.type).toBe(TransactionType.INVOICE_PAYMENT);
+
+    const purchases = await prisma.transaction.findMany({
+      where: { id: { in: purchaseIds } },
+    });
+    for (const purchase of purchases) {
+      expect(purchase.cashDate?.toISOString().slice(0, 10)).toBe('2026-09-10');
+    }
+  });
+
+  it('POST /api/invoices/:id/payments supports partial payment status', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-500]);
+    const payment = await seedAccountDebit({
+      amount: -200,
+      date: '2026-09-05',
+      dedupKey: 'pay-partial',
+    });
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      balance: -300,
+      status: 'partial',
+    });
+  });
+
+  it('POST /api/invoices/:id/payments uses latest payment date for cashDate', async () => {
+    const { invoice, purchaseIds } = await seedInvoiceWithPurchases([-500]);
+    const first = await seedAccountDebit({
+      amount: -200,
+      date: '2026-09-05',
+      dedupKey: 'pay-1',
+    });
+    const second = await seedAccountDebit({
+      amount: -300,
+      date: '2026-09-20',
+      dedupKey: 'pay-2',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [first.id] })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [second.id] })
+      .expect(200);
+
+    const purchases = await prisma.transaction.findMany({
+      where: { id: { in: purchaseIds } },
+    });
+    for (const purchase of purchases) {
+      expect(purchase.cashDate?.toISOString().slice(0, 10)).toBe('2026-09-20');
+    }
+
+    const list = await request(app.getHttpServer())
+      .get(`/api/cards/${cardId}/invoices`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(list.body[0]).toMatchObject({
+      id: invoice.id,
+      balance: 0,
+      status: 'paid',
+    });
+  });
+
+  it('POST /api/invoices/:id/payments rejects already linked transaction', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-100]);
+    const payment = await seedAccountDebit({
+      amount: -100,
+      date: '2026-09-10',
+      dedupKey: 'pay-dup',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(400);
+  });
+
+  it('POST /api/invoices/:id/payments rejects card transactions', async () => {
+    const { invoice, purchaseIds } = await seedInvoiceWithPurchases([-100]);
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [purchaseIds[0]] })
+      .expect(400);
+  });
+
+  it('GET /api/invoices/:id includes empty payments when none linked', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-50]);
+
+    const res = await request(app.getHttpServer())
+      .get(`/api/invoices/${invoice.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body.payments).toEqual([]);
+    expect(res.body.status).toBe('open');
   });
 });

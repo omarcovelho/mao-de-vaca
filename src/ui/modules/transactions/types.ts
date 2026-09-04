@@ -4,7 +4,7 @@ export type TransactionItem = {
   id: string;
   description: string;
   amount: number;
-  type: 'EXPENSE' | 'INCOME' | 'TRANSFER';
+  type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
   competenceDate: string;
   cashDate: string | null;
   displayDate: string;

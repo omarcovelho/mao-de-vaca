@@ -41,6 +41,7 @@ describe('Transactions HTTP', () => {
   let batchId: string;
 
   async function cleanup() {
+    await prisma.invoicePaymentLink.deleteMany({ where: { userId } });
     await prisma.transaction.deleteMany({ where: { userId } });
     await prisma.importBatch.deleteMany({ where: { userId } });
     await prisma.invoice.deleteMany({ where: { userId } });
@@ -52,7 +53,7 @@ describe('Transactions HTTP', () => {
   async function seedTransaction(input: {
     description: string;
     amount: string;
-    type: 'EXPENSE' | 'INCOME';
+    type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
     categoryId: string;
     accountId?: string | null;
     cardId?: string | null;
@@ -391,6 +392,57 @@ describe('Transactions HTTP', () => {
       id: card.id,
       label: 'Nubank Roxinho',
       bank: { name: 'Nubank' },
+    });
+  });
+
+  it('GET /api/transactions returns invoiceId for linked invoice payments', async () => {
+    const card = await prisma.card.create({
+      data: { userId, bankId, label: 'Nubank Roxinho' },
+    });
+    const invoice = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: card.id,
+        referenceMonth: new Date('2026-01-01T00:00:00.000Z'),
+        dueDate: new Date('2026-02-10T00:00:00.000Z'),
+      },
+    });
+
+    const payment = await seedTransaction({
+      description: 'Pagamento fatura',
+      amount: '-100.00',
+      type: 'INVOICE_PAYMENT',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-02-10',
+      cashDate: '2026-02-10',
+      dedupKey: 'payment-link-1',
+    });
+
+    await prisma.invoicePaymentLink.create({
+      data: {
+        userId,
+        invoiceId: invoice.id,
+        transactionId: payment.id,
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        regime: 'competence',
+        from: '2026-02-01',
+        to: '2026-02-28',
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({
+      id: payment.id,
+      type: 'INVOICE_PAYMENT',
+      invoiceId: invoice.id,
+      account: { id: accountAId },
     });
   });
 

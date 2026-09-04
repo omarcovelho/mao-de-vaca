@@ -7,5 +7,5 @@
     "tsBuildInfoFile": "./dist/server/.tsbuildinfo"
   },
   "include": ["src/server/**/*"],
-  "exclude": ["node_modules", "dist", "src/ui"]
+  "exclude": ["node_modules", "dist", "src/ui", "src/server/**/*.spec.ts"]
 }

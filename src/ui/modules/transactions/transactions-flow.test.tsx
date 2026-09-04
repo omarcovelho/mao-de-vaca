@@ -386,4 +386,74 @@ describe('Transactions UI flow', () => {
       '/cartoes?invoiceId=inv-1',
     );
   });
+
+  it('links invoice payment account origin to the invoice detail', async () => {
+    const month = toMonthKey();
+
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/auth/me')) {
+        return Response.json({ id: 'u1', username: 'mao' });
+      }
+      if (url.includes('/api/setup/status')) {
+        return Response.json(setupOk);
+      }
+      if (url.includes('/api/accounts')) {
+        return Response.json([
+          {
+            id: 'acc-1',
+            label: 'Conta Nubank',
+            active: true,
+            bank: { id: 'b1', name: 'Nubank' },
+          },
+        ]);
+      }
+      if (url.includes('/api/categories')) {
+        return Response.json([foodLeaf]);
+      }
+      if (url.includes('/api/transactions?')) {
+        return Response.json({
+          regime: 'competence',
+          from: `${month}-01`,
+          to: `${month}-28`,
+          items: [
+            {
+              id: 'pay-1',
+              description: 'Pagamento fatura',
+              amount: -500,
+              type: 'INVOICE_PAYMENT',
+              competenceDate: `${month}-10`,
+              cashDate: `${month}-10`,
+              displayDate: `${month}-10`,
+              active: true,
+              category: {
+                id: 'food',
+                name: 'Alimentação',
+                color: '#2d6a4f',
+                icon: 'utensils',
+                kind: 'EXPENSE',
+              },
+              account: {
+                id: 'acc-1',
+                label: 'Conta Nubank',
+                bank: { id: 'b1', name: 'Nubank' },
+              },
+              card: null,
+              invoiceId: 'inv-1',
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderTransactionsApp();
+
+    expect(await screen.findByText('Pagamento fatura')).toBeInTheDocument();
+    const row = screen.getByText('Pagamento fatura').closest('li');
+    expect(within(row!).getByRole('link')).toHaveAttribute(
+      'href',
+      '/cartoes?invoiceId=inv-1',
+    );
+  });
 });
