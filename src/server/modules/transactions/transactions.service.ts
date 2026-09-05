@@ -118,13 +118,26 @@ export class TransactionsService {
     const dateField =
       regime === 'competence' ? 'competenceDate' : 'cashDate';
     const includeInactive = query.includeInactive === 'true';
+    const cardId = query.cardId?.trim();
+    const accountId = query.accountId?.trim();
+    const q = query.q?.trim();
+    const selectedCategoryIds = this.normalizeCategoryIds(query.categoryId);
+
+    const categoryIds =
+      selectedCategoryIds.length > 0
+        ? await this.resolveCategoryFilterIds(userId, selectedCategoryIds)
+        : null;
 
     const rows = await this.prisma.transaction.findMany({
       where: {
         userId,
         ...(includeInactive ? {} : { active: true }),
-        ...(query.categoryId ? { categoryId: query.categoryId } : {}),
-        ...(query.accountId ? { accountId: query.accountId } : {}),
+        ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
+        ...(accountId ? { accountId } : {}),
+        ...(cardId ? { cardId } : {}),
+        ...(q
+          ? { description: { contains: q, mode: 'insensitive' } }
+          : {}),
         [dateField]: {
           gte: new Date(from),
           lte: new Date(to),
@@ -140,6 +153,51 @@ export class TransactionsService {
       to,
       items: rows.map((row) => this.toItem(row as TransactionRow, regime)),
     };
+  }
+
+  private normalizeCategoryIds(raw?: string | string[]): string[] {
+    if (raw == null) {
+      return [];
+    }
+    const list = Array.isArray(raw) ? raw : [raw];
+    return [
+      ...new Set(
+        list.map((id) => id.trim()).filter((id) => id.length > 0),
+      ),
+    ];
+  }
+
+  /** Union of subtrees for each selected id. Missing ids contribute nothing. */
+  private async resolveCategoryFilterIds(
+    userId: string,
+    categoryIds: string[],
+  ): Promise<string[]> {
+    const all = await this.prisma.category.findMany({
+      where: { userId },
+      select: { id: true, parentId: true },
+    });
+    const childrenByParent = new Map<string, string[]>();
+    for (const row of all) {
+      if (!row.parentId) continue;
+      const list = childrenByParent.get(row.parentId) ?? [];
+      list.push(row.id);
+      childrenByParent.set(row.parentId, list);
+    }
+    const known = new Set(all.map((row) => row.id));
+    const resolved = new Set<string>();
+    const walk = (id: string) => {
+      resolved.add(id);
+      for (const childId of childrenByParent.get(id) ?? []) {
+        walk(childId);
+      }
+    };
+    for (const id of categoryIds) {
+      if (!known.has(id)) {
+        continue;
+      }
+      walk(id);
+    }
+    return [...resolved];
   }
 
   async listTransferCandidates(

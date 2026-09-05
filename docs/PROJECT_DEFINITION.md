@@ -268,7 +268,7 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RF-19** — O sistema exibe **indicadores do período**: total de gastos, total de receitas e saldo.
 - **RF-20** — O sistema exibe a **quebra de gastos por categoria**, com percentual do total; despesas **sem categoria** entram no total e aparecem como fatia sintética “Sem categoria” (não é um cadastro de categoria).
 - **RF-21** — O sistema exibe a **evolução mensal** dos gastos ao longo do tempo.
-- **RF-22** — O sistema exibe uma **tabela de lançamentos filtrável** por período, categoria e origem (conta ou cartão).
+- **RF-22** — O sistema exibe uma **tabela de lançamentos filtrável** por período, categoria (uma ou mais; folha ou pai = subárvore), origem (conta ou cartão) e **busca por descrição** (substring).
 
 ---
 

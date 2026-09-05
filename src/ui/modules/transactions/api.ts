@@ -25,11 +25,21 @@ export async function listTransactions(
     from: params.from,
     to: params.to,
   });
-  if (params.categoryId) {
-    query.set('categoryId', params.categoryId);
+  if (params.categoryIds) {
+    for (const id of params.categoryIds) {
+      if (id) {
+        query.append('categoryId', id);
+      }
+    }
   }
   if (params.accountId) {
     query.set('accountId', params.accountId);
+  }
+  if (params.cardId) {
+    query.set('cardId', params.cardId);
+  }
+  if (params.q) {
+    query.set('q', params.q);
   }
   if (params.includeInactive) {
     query.set('includeInactive', 'true');

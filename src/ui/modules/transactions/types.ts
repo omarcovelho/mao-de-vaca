@@ -42,8 +42,10 @@ export type ListTransactionsParams = {
   regime: Regime;
   from: string;
   to: string;
-  categoryId?: string;
+  categoryIds?: string[];
   accountId?: string;
+  cardId?: string;
+  q?: string;
   includeInactive?: boolean;
 };
 

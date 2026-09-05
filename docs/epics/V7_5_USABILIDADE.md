@@ -1,7 +1,7 @@
 # V7.5 — Usabilidade e reversibilidade
 
 **Branch:** `feature/v7-5-usabilidade`  
-**Status:** In progress (slices A + C done)  
+**Status:** In progress (slices A + C + D done)  
 **Roadmap:** [MVP_EPIC_ROADMAP.md](../MVP_EPIC_ROADMAP.md)
 
 ## Resultado
@@ -84,9 +84,9 @@ Em `/importar` modo fatura, se o cartão não tiver fatura, hoje só há link pa
 | Item | Contrato |
 |------|----------|
 | `GET /api/transactions` | Query opcional `cardId` (origem cartão); `q` (substring case-insensitive em `description`) |
-| `categoryId` | Se o id for **folha**, comportamento atual. Se for **pai**, incluir lançamentos cuja `categoryId` está na subárvore (o nó e descendentes) |
-| Origens | `accountId` e `cardId` são AND; um lançamento tem só uma origem — os dois juntos tendem a lista vazia (aceitável; não unir) |
-| UI | Filtro **Cartão** (contas + cartões como origens); campo **Busca** na descrição; select de categoria passa a listar pais e folhas (pais incluem a subárvore) |
+| `categoryId` | Se o id for **folha**, comportamento atual. Se for **pai**, incluir lançamentos cuja `categoryId` está na subárvore (o nó e descendentes). **Repetível** (`categoryId=a&categoryId=b`): união das subárvores |
+| Origens | `accountId` e `cardId` são mutuamente exclusivos na UI (escolher um limpa o outro). Na API continuam AND se ambos forem enviados |
+| UI | Filtro **Cartão**; **Busca** acima da lista; select de categoria **múltiplo** (pais e folhas; união das subárvores) |
 
 ### E — Completude de caixa visível
 
@@ -125,10 +125,10 @@ Rotas novas ou comportamento novo; o restante permanece.
 - [x] A: DELETE pagamento + `cashDate` null sem pagamentos + UI Desvincular + testes HTTP
 - [ ] B: Toggle inativos + Reativar nas quatro telas + Vitest
 - [x] C: Nova fatura em `/importar` (UI; validação lint + build — Vitest UI removido)
-- [ ] D: `cardId` / `q` / categoria pai + filtros na UI + testes
+- [x] D: `cardId` / `q` / categoria pai + filtros na UI + testes
 - [ ] E: marcador “sem caixa”; `GET /api/invoices`; home com mês + faturas abertas
 - [ ] F: unlink de transferência restaura a outra perna sem copiar categoria + testes
-- [x] PROJECT_DEFINITION + ARCHITECTURE atualizados no mesmo PR de código (slice A; RF-02c já cobre criação na hora)
+- [x] PROJECT_DEFINITION + ARCHITECTURE atualizados no mesmo PR de código (slice A; RF-02c já cobre criação na hora; slice D: RF-22 + busca)
 - [x] Copy PT; suíte Jest + Vitest verde (slice A)
 
 ## Notas

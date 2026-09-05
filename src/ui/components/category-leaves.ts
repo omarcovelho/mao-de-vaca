@@ -61,6 +61,25 @@ export function flattenCategoryParents(
   return options;
 }
 
+/** Flatten tree to filter options: parents and leaves (path labels). */
+export function flattenCategoryFilterOptions(
+  nodes: Category[],
+  path: string[] = [],
+): Array<{ value: string; label: string }> {
+  const options: Array<{ value: string; label: string }> = [];
+  for (const node of nodes) {
+    const nextPath = [...path, node.name];
+    options.push({
+      value: node.id,
+      label: nextPath.join(' › '),
+    });
+    if (node.children && node.children.length > 0) {
+      options.push(...flattenCategoryFilterOptions(node.children, nextPath));
+    }
+  }
+  return options;
+}
+
 export function findCategoryLabel(
   options: Array<{ value: string; label: string }>,
   id: string,

@@ -494,6 +494,262 @@ describe('Transactions HTTP', () => {
     expect(byAccount.body.items[0].description).toBe('Food A');
   });
 
+  it('GET /api/transactions filters by cardId', async () => {
+    const cardA = await prisma.card.create({
+      data: { userId, bankId, label: 'Cartão A' },
+    });
+    const cardB = await prisma.card.create({
+      data: { userId, bankId, label: 'Cartão B' },
+    });
+    const invoiceA = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: cardA.id,
+        referenceMonth: new Date('2026-01-01T00:00:00.000Z'),
+        dueDate: new Date('2026-02-10T00:00:00.000Z'),
+      },
+    });
+    const invoiceB = await prisma.invoice.create({
+      data: {
+        userId,
+        cardId: cardB.id,
+        referenceMonth: new Date('2026-01-01T00:00:00.000Z'),
+        dueDate: new Date('2026-02-10T00:00:00.000Z'),
+      },
+    });
+
+    await seedTransaction({
+      description: 'Compra cartão A',
+      amount: '-20.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: null,
+      cardId: cardA.id,
+      invoiceId: invoiceA.id,
+      competenceDate: '2026-01-10',
+      cashDate: null,
+      dedupKey: 'card-a-1',
+    });
+    await seedTransaction({
+      description: 'Compra cartão B',
+      amount: '-30.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: null,
+      cardId: cardB.id,
+      invoiceId: invoiceB.id,
+      competenceDate: '2026-01-11',
+      cashDate: null,
+      dedupKey: 'card-b-1',
+    });
+    await seedTransaction({
+      description: 'Conta A',
+      amount: '-10.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-01-12',
+      dedupKey: 'acc-a-1',
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        regime: 'competence',
+        from: '2026-01-01',
+        to: '2026-01-31',
+        cardId: cardA.id,
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].description).toBe('Compra cartão A');
+    expect(res.body.items[0].card.id).toBe(cardA.id);
+  });
+
+  it('GET /api/transactions filters by q case-insensitive on description', async () => {
+    await seedTransaction({
+      description: 'PIX Mercado Livre',
+      amount: '-50.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-01-10',
+      dedupKey: 'q-1',
+    });
+    await seedTransaction({
+      description: 'Salário Janeiro',
+      amount: '1000.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountAId,
+      competenceDate: '2026-01-05',
+      dedupKey: 'q-2',
+    });
+
+    const match = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        q: 'mercado',
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(match.body.items).toHaveLength(1);
+    expect(match.body.items[0].description).toBe('PIX Mercado Livre');
+
+    const miss = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        q: 'uber',
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(miss.body.items).toHaveLength(0);
+  });
+
+  it('GET /api/transactions expands parent categoryId to subtree', async () => {
+    const parent = await prisma.category.create({
+      data: {
+        userId,
+        name: 'Moradia',
+        kind: 'EXPENSE',
+        color: '#1b4332',
+        icon: 'home',
+      },
+    });
+    const rent = await prisma.category.create({
+      data: {
+        userId,
+        parentId: parent.id,
+        name: 'Aluguel',
+        kind: 'EXPENSE',
+        color: '#2d6a4f',
+        icon: 'home',
+      },
+    });
+    const condo = await prisma.category.create({
+      data: {
+        userId,
+        parentId: parent.id,
+        name: 'Condomínio',
+        kind: 'EXPENSE',
+        color: '#40916c',
+        icon: 'building',
+      },
+    });
+
+    await seedTransaction({
+      description: 'Aluguel jan',
+      amount: '-2000.00',
+      type: 'EXPENSE',
+      categoryId: rent.id,
+      accountId: accountAId,
+      competenceDate: '2026-01-05',
+      dedupKey: 'rent-1',
+    });
+    await seedTransaction({
+      description: 'Condo jan',
+      amount: '-500.00',
+      type: 'EXPENSE',
+      categoryId: condo.id,
+      accountId: accountAId,
+      competenceDate: '2026-01-06',
+      dedupKey: 'condo-1',
+    });
+    await seedTransaction({
+      description: 'Food outside',
+      amount: '-40.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-01-07',
+      dedupKey: 'food-out',
+    });
+
+    const byParent = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        categoryId: parent.id,
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(byParent.body.items).toHaveLength(2);
+    expect(
+      byParent.body.items
+        .map((i: { description: string }) => i.description)
+        .sort(),
+    ).toEqual(['Aluguel jan', 'Condo jan']);
+
+    const byLeaf = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        categoryId: rent.id,
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(byLeaf.body.items).toHaveLength(1);
+    expect(byLeaf.body.items[0].description).toBe('Aluguel jan');
+  });
+
+  it('GET /api/transactions accepts multiple categoryId values as OR of subtrees', async () => {
+    await seedTransaction({
+      description: 'Food multi',
+      amount: '-10.00',
+      type: 'EXPENSE',
+      categoryId: foodId,
+      accountId: accountAId,
+      competenceDate: '2026-01-10',
+      dedupKey: 'multi-food',
+    });
+    await seedTransaction({
+      description: 'Leisure multi',
+      amount: '-15.00',
+      type: 'EXPENSE',
+      categoryId: leisureId,
+      accountId: accountAId,
+      competenceDate: '2026-01-11',
+      dedupKey: 'multi-leisure',
+    });
+    await seedTransaction({
+      description: 'Salary multi',
+      amount: '100.00',
+      type: 'INCOME',
+      categoryId: salaryId,
+      accountId: accountAId,
+      competenceDate: '2026-01-12',
+      dedupKey: 'multi-salary',
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/transactions')
+      .query({
+        from: '2026-01-01',
+        to: '2026-01-31',
+        categoryId: [foodId, leisureId],
+      })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(
+      res.body.items
+        .map((i: { description: string }) => i.description)
+        .sort(),
+    ).toEqual(['Food multi', 'Leisure multi']);
+  });
+
   it('GET /api/transactions excludes inactive by default', async () => {
     await seedTransaction({
       description: 'Ativo',
