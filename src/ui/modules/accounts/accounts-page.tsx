@@ -1,7 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ConfirmModal } from '../../components/confirm-modal';
+import { FormModal } from '../../components/form-modal';
+import { AccountOriginIcon } from '../../components/origin-icon';
 import { PageHeader } from '../../components/page-header';
 import { useToast } from '../../components/toast';
+import { TrashGlyph } from '../categories/category-icons';
 import * as accountsApi from './api';
 import { BankFields } from './bank-fields';
 import { OnboardingContinue } from './onboarding-continue';
@@ -159,6 +162,14 @@ export function AccountsPage() {
     );
   }
 
+  function closeCreateModal() {
+    if (submitting) {
+      return;
+    }
+    setShowForm(false);
+    setError(null);
+  }
+
   return (
     <section className="page">
       <PageHeader
@@ -168,32 +179,104 @@ export function AccountsPage() {
           <button
             type="button"
             className="btn btn--primary"
-            onClick={() => setShowForm((open) => !open)}
+            onClick={() => {
+              setError(null);
+              setShowForm(true);
+            }}
           >
-            {showForm ? 'Cancelar' : 'Adicionar conta'}
+            Adicionar conta
           </button>
         }
       />
 
-      {showForm ? (
-        <form onSubmit={handleSubmit} className="form-panel">
-          <h2 className="form-panel__title">Nova conta</h2>
-          <div className="form-stack">
-            <label>
-              Apelido
-              <input
-                name="label"
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-                required
-              />
-            </label>
-            <BankFields
-              bankId={bankId}
-              onBankIdChange={setBankId}
-              onError={setError}
+      {error && !showForm ? (
+        <p className="alert" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {loading ? (
+        <p className="page__empty">Carregando…</p>
+      ) : items.length === 0 ? (
+        <div className="surface-panel surface-panel--empty">
+          <p className="page__empty" style={{ margin: 0 }}>
+            Nenhuma conta cadastrada ainda.
+          </p>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={() => {
+              setError(null);
+              setShowForm(true);
+            }}
+          >
+            Adicionar conta
+          </button>
+        </div>
+      ) : (
+        <div className="surface-panel">
+          <ul className="list-rows">
+            {items.map((item) => (
+              <li key={item.id} className="list-row origin-row">
+                <div className="origin-row__identity">
+                  <span className="origin-row__icon" aria-hidden>
+                    <AccountOriginIcon />
+                  </span>
+                  <div className="list-row__main">
+                    <div className="list-row__title-row">
+                      <span className="list-row__title">{item.label}</span>
+                      <span className="bank-pill">{item.bank.name}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="list-row__actions">
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--icon btn--icon-danger"
+                    aria-label={`Desativar ${item.label}`}
+                    onClick={() => setDeactivateId(item.id)}
+                  >
+                    <TrashGlyph />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <FormModal
+        open={showForm}
+        title="Nova conta"
+        description="Conta bancária usada como origem de lançamentos."
+        busy={submitting}
+        onClose={closeCreateModal}
+      >
+        <form onSubmit={handleSubmit} className="form-stack">
+          <label>
+            Apelido
+            <input
+              name="label"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              required
             />
-            {error ? <p role="alert">{error}</p> : null}
+          </label>
+          <BankFields
+            bankId={bankId}
+            onBankIdChange={setBankId}
+            onError={setError}
+          />
+          {error ? <p role="alert">{error}</p> : null}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={submitting}
+              onClick={closeCreateModal}
+            >
+              Cancelar
+            </button>
             <button
               type="submit"
               className="btn btn--primary"
@@ -203,39 +286,7 @@ export function AccountsPage() {
             </button>
           </div>
         </form>
-      ) : null}
-
-      {!showForm && error ? (
-        <p className="alert" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      {loading ? (
-        <p className="page__empty">Carregando…</p>
-      ) : items.length === 0 ? (
-        <p className="page__empty">Nenhuma conta cadastrada ainda.</p>
-      ) : (
-        <ul className="list-rows">
-          {items.map((item) => (
-            <li key={item.id} className="list-row">
-              <div className="list-row__main">
-                <span className="list-row__title">{item.label}</span>
-                <span className="bank-pill">{item.bank.name}</span>
-              </div>
-              <div className="list-row__actions">
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => setDeactivateId(item.id)}
-                >
-                  Desativar
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      </FormModal>
 
       <ConfirmModal
         open={deactivateId !== null}

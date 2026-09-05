@@ -1,20 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ConfirmModal } from '../../components/confirm-modal';
-import { SearchableSelect } from '../../components/searchable-select';
+import { PageHeader } from '../../components/page-header';
 import { useToast } from '../../components/toast';
-import { listAccounts } from '../accounts/api';
-import type { Origin } from '../accounts/types';
-import { listTransactions } from '../transactions/api';
-import type { TransactionItem } from '../transactions/types';
 import * as invoicesApi from './api';
+import { LinkInvoicePaymentModal } from './link-payment-modal';
 import type { InvoiceDetail } from './types';
-
-function formatMoney(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  });
-}
 
 function formatMonth(isoDate: string): string {
   if (!isoDate) {
@@ -66,11 +56,14 @@ function statusLabel(status: InvoiceDetail['status']): string {
   return 'Quitada';
 }
 
-function shiftIsoDate(isoDate: string, days: number): string {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+function statusPillClass(status: InvoiceDetail['status']): string {
+  if (status === 'open') {
+    return 'status-pill status-pill--warning';
+  }
+  if (status === 'partial') {
+    return 'status-pill status-pill--info';
+  }
+  return 'status-pill status-pill--success';
 }
 
 type InvoiceDetailPanelProps = {
@@ -89,34 +82,13 @@ export function InvoiceDetailPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
-  const [accounts, setAccounts] = useState<Origin[]>([]);
-  const [accountId, setAccountId] = useState('');
-  const [candidates, setCandidates] = useState<TransactionItem[]>([]);
-  const [candidatesLoading, setCandidatesLoading] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [linkError, setLinkError] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
-  const [confirmLinkOpen, setConfirmLinkOpen] = useState(false);
   const [unlinkPaymentId, setUnlinkPaymentId] = useState<string | null>(null);
   const [unlinkBusy, setUnlinkBusy] = useState(false);
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateDraft, setDueDateDraft] = useState('');
   const [dueDateBusy, setDueDateBusy] = useState(false);
   const [dueDateError, setDueDateError] = useState<string | null>(null);
-
-  const accountOptions = useMemo(
-    () =>
-      accounts.map((account) => ({
-        value: account.id,
-        label: `${account.label} (${account.bank.name})`,
-      })),
-    [accounts],
-  );
-
-  const linkedIds = useMemo(
-    () => new Set((detail?.payments ?? []).map((payment) => payment.id)),
-    [detail],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -152,108 +124,22 @@ export function InvoiceDetailPanel({
     };
   }, [invoiceId, onLoaded]);
 
-  useEffect(() => {
-    if (!linking) {
-      return;
-    }
-    let cancelled = false;
-    async function loadAccounts() {
-      try {
-        const list = await listAccounts();
-        if (cancelled) {
-          return;
-        }
-        setAccounts(list);
-        setAccountId((current) => current || list[0]?.id || '');
-      } catch (err) {
-        if (!cancelled) {
-          setLinkError(
-            err instanceof Error
-              ? err.message
-              : 'Não foi possível carregar as contas.',
-          );
-        }
-      }
-    }
-    void loadAccounts();
-    return () => {
-      cancelled = true;
-    };
-  }, [linking]);
-
-  useEffect(() => {
-    if (!linking || !accountId || !detail) {
-      setCandidates([]);
-      return;
-    }
-    let cancelled = false;
-    async function loadCandidates() {
-      setCandidatesLoading(true);
-      setLinkError(null);
-      try {
-        const from = shiftIsoDate(detail!.dueDate, -15);
-        const to = shiftIsoDate(detail!.dueDate, 15);
-        const response = await listTransactions({
-          regime: 'competence',
-          from,
-          to,
-          accountId,
-        });
-        if (cancelled) {
-          return;
-        }
-        setCandidates(
-          response.items.filter(
-            (item) =>
-              item.account &&
-              item.amount < 0 &&
-              item.type !== 'INVOICE_PAYMENT' &&
-              !linkedIds.has(item.id),
-          ),
-        );
-        setSelectedIds([]);
-      } catch (err) {
-        if (!cancelled) {
-          setLinkError(
-            err instanceof Error
-              ? err.message
-              : 'Não foi possível buscar débitos.',
-          );
-          setCandidates([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setCandidatesLoading(false);
-        }
-      }
-    }
-    void loadCandidates();
-    return () => {
-      cancelled = true;
-    };
-  }, [linking, accountId, detail, linkedIds]);
-
-  async function handleConfirmLink() {
-    if (selectedIds.length === 0) {
-      setLinkError('Selecione ao menos um débito.');
+  async function handleConfirmLink(transactionIds: string[]) {
+    if (transactionIds.length === 0) {
       return;
     }
     setLinkBusy(true);
-    setLinkError(null);
     try {
-      const next = await invoicesApi.linkPayments(invoiceId, selectedIds);
+      const next = await invoicesApi.linkPayments(invoiceId, transactionIds);
       setDetail(next);
       onLoaded?.(next);
       setLinking(false);
-      setSelectedIds([]);
-      setConfirmLinkOpen(false);
       toast.success('Pagamento vinculado à fatura.');
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
           : 'Não foi possível vincular o pagamento.';
-      setLinkError(message);
       toast.error(message);
     } finally {
       setLinkBusy(false);
@@ -309,269 +195,236 @@ export function InvoiceDetailPanel({
   }
 
   if (loading) {
-    return <p className="page__empty">Carregando fatura…</p>;
+    return (
+      <>
+        <button
+          type="button"
+          className="btn btn--ghost invoice-detail__back"
+          onClick={onBack}
+        >
+          ← Faturas
+        </button>
+        <p className="page__empty">Carregando fatura…</p>
+      </>
+    );
   }
 
   if (error || !detail) {
     return (
-      <div className="section">
+      <>
+        <button
+          type="button"
+          className="btn btn--ghost invoice-detail__back"
+          onClick={onBack}
+        >
+          ← Faturas
+        </button>
         <p className="alert" role="alert">
           {error ?? 'Fatura não encontrada.'}
         </p>
-        <button type="button" className="btn btn--ghost" onClick={onBack}>
-          Voltar às faturas
-        </button>
-      </div>
+      </>
     );
   }
 
+  const payments = detail.payments ?? [];
+
   return (
-    <section className="section" aria-labelledby="invoice-detail-heading">
-      <div className="section__header">
-        <div>
-          <button type="button" className="btn btn--ghost btn--compact" onClick={onBack}>
-            ← Faturas
-          </button>
-          <h2 id="invoice-detail-heading" className="section__title">
-            Fatura {formatMonth(detail.referenceMonth)}
+    <>
+      <button
+        type="button"
+        className="btn btn--ghost invoice-detail__back"
+        onClick={onBack}
+      >
+        ← Faturas
+      </button>
+      <PageHeader
+        title={`Fatura ${formatMonth(detail.referenceMonth)}`}
+        subtitle={`${detail.card.label} · ${detail.card.bank.name}`}
+      />
+
+      <section className="surface-panel" aria-labelledby="invoice-summary-heading">
+        <div className="section__header">
+          <h2 id="invoice-summary-heading" className="section__title">
+            Fatura
           </h2>
-          <p className="section__hint">
-            {detail.card.label} · {detail.card.bank.name} ·{' '}
-            {statusLabel(detail.status)} · {formatMoney(detail.balance)}
-          </p>
-          {editingDueDate ? (
-            <div className="invoice-due-date-edit form-stack">
-              <label htmlFor="invoice-due-date">Vencimento</label>
-              <input
-                id="invoice-due-date"
-                type="date"
-                value={dueDateDraft}
-                disabled={dueDateBusy}
-                onChange={(event) => setDueDateDraft(event.target.value)}
-              />
-              {dueDateError ? (
-                <p className="alert" role="alert">
-                  {dueDateError}
-                </p>
-              ) : null}
-              <div className="section__actions">
-                <button
-                  type="button"
-                  className="btn btn--primary btn--compact"
-                  disabled={dueDateBusy}
-                  onClick={() => void handleSaveDueDate()}
-                >
-                  {dueDateBusy ? 'Salvando…' : 'Salvar vencimento'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--compact"
-                  disabled={dueDateBusy}
-                  onClick={() => {
-                    setEditingDueDate(false);
-                    setDueDateDraft(detail.dueDate);
-                    setDueDateError(null);
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          ) : (
+        </div>
+        <dl className="invoice-summary">
+          <div className="invoice-summary__row">
+            <dt>Status</dt>
+            <dd>
+              <span className={statusPillClass(detail.status)}>
+                {statusLabel(detail.status)}
+              </span>
+            </dd>
+          </div>
+          <div className="invoice-summary__row">
+            <dt>Vencimento</dt>
+            <dd>
+              {editingDueDate ? (
+                <div className="invoice-due-date-edit">
+                  <input
+                    id="invoice-due-date"
+                    type="date"
+                    value={dueDateDraft}
+                    disabled={dueDateBusy}
+                    aria-label="Vencimento"
+                    onChange={(event) => setDueDateDraft(event.target.value)}
+                  />
+                  {dueDateError ? (
+                    <p className="alert" role="alert">
+                      {dueDateError}
+                    </p>
+                  ) : null}
+                  <div className="section__actions">
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      disabled={dueDateBusy}
+                      onClick={() => void handleSaveDueDate()}
+                    >
+                      {dueDateBusy ? 'Salvando…' : 'Salvar'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      disabled={dueDateBusy}
+                      onClick={() => {
+                        setEditingDueDate(false);
+                        setDueDateDraft(detail.dueDate);
+                        setDueDateError(null);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <span className="invoice-summary__due">
+                  <span>{formatDueDate(detail.dueDate)}</span>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() => {
+                      setDueDateDraft(detail.dueDate);
+                      setEditingDueDate(true);
+                      setDueDateError(null);
+                    }}
+                  >
+                    Editar
+                  </button>
+                </span>
+              )}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="surface-panel" aria-labelledby="invoice-payments-heading">
+        <div className="section__header">
+          <div>
+            <h2 id="invoice-payments-heading" className="section__title">
+              Pagamentos
+            </h2>
             <p className="section__hint">
-              Vence {formatDueDate(detail.dueDate)}{' '}
+              Débitos da conta que baixam esta fatura. Se o vínculo estiver
+              errado, remova-o — o débito volta à conta e o caixa é recalculado.
+            </p>
+          </div>
+          {detail.status !== 'paid' ? (
+            <div className="section__actions">
               <button
                 type="button"
-                className="btn btn--ghost btn--compact"
-                onClick={() => {
-                  setDueDateDraft(detail.dueDate);
-                  setEditingDueDate(true);
-                  setDueDateError(null);
-                }}
+                className="btn btn--primary btn--sm"
+                onClick={() => setLinking(true)}
               >
-                Editar
+                Vincular pagamento
               </button>
-            </p>
-          )}
-        </div>
-        {detail.status !== 'paid' ? (
-          <div className="section__actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => {
-                setLinking((current) => !current);
-                setLinkError(null);
-              }}
-            >
-              {linking ? 'Cancelar' : 'Vincular pagamento'}
-            </button>
-          </div>
-        ) : (detail.payments ?? []).length > 0 ? (
-          <p className="section__hint section__hint--actions">
-            Errou o débito? Remova o vínculo em Pagamentos abaixo.
-          </p>
-        ) : null}
-      </div>
-
-      <h3 className="section__title">Pagamentos vinculados</h3>
-      <p className="section__hint">
-        Débitos da conta que baixam o saldo desta fatura. Se vinculou o
-        lançamento errado, remova o vínculo — o débito volta à conta e o caixa
-        das compras é recalculado.
-      </p>
-      {(detail.payments ?? []).length === 0 ? (
-        <p className="page__empty">Nenhum pagamento vinculado ainda.</p>
-      ) : (
-        <ul className="tx-rows tx-rows--invoice">
-          {(detail.payments ?? []).map((payment) => (
-            <li key={payment.id} className="tx-row tx-row--compact tx-row--with-action">
-              <span className="tx-row__date">
-                {formatDayMonth(payment.competenceDate)}
-              </span>
-              <span className="tx-row__description" title={payment.description}>
-                {payment.description}
-              </span>
-              <span className="tx-row__category">
-                {payment.account.label} · {payment.account.bank.name}
-              </span>
-              <span className="tx-row__amount tx-row__amount--expense">
-                {formatAmount(payment.amount)}
-              </span>
-              <button
-                type="button"
-                className="btn btn--secondary btn--compact tx-row__action"
-                disabled={unlinkBusy}
-                aria-label={`Remover vínculo de ${payment.description}`}
-                onClick={() => setUnlinkPaymentId(payment.id)}
-              >
-                Remover vínculo
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {linking ? (
-        <div className="section invoice-link-panel">
-          <h3 className="section__title">Vincular débito da conta</h3>
-          <p className="section__hint">
-            Busca débitos próximos ao vencimento ({formatDueDate(detail.dueDate)}
-            ). O lançamento passa a ser pagamento de fatura.
-          </p>
-          <div className="form-stack">
-            <span className="form-label">Conta</span>
-            <SearchableSelect
-              aria-label="Conta"
-              options={accountOptions}
-              value={accountId}
-              onChange={setAccountId}
-              disabled={accounts.length === 0 || linkBusy}
-              placeholder={
-                accounts.length === 0 ? 'Nenhuma conta ativa' : 'Selecione…'
-              }
-            />
-          </div>
-
-          {candidatesLoading ? (
-            <p className="page__empty">Buscando débitos…</p>
-          ) : candidates.length === 0 ? (
-            <p className="page__empty">
-              Nenhum débito elegível neste período. Ajuste a conta ou importe o
-              extrato.
-            </p>
-          ) : (
-            <ul className="tx-rows tx-rows--invoice">
-              {candidates.map((item) => {
-                const checked = selectedIds.includes(item.id);
-                return (
-                  <li key={item.id} className="tx-row tx-row--compact tx-row--pick">
-                    <label className="tx-row__description">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={linkBusy}
-                        onChange={() => {
-                          setSelectedIds((current) =>
-                            checked
-                              ? current.filter((id) => id !== item.id)
-                              : [...current, item.id],
-                          );
-                        }}
-                      />{' '}
-                      {item.description}
-                    </label>
-                    <span className="tx-row__date">
-                      {formatDueDate(item.competenceDate)}
-                    </span>
-                    <span className="tx-row__amount tx-row__amount--expense">
-                      {formatAmount(item.amount)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {linkError ? (
-            <p className="alert" role="alert">
-              {linkError}
-            </p>
+            </div>
           ) : null}
-
-          <div className="section__actions">
-            <button
-              type="button"
-              className="btn btn--primary"
-              disabled={linkBusy || selectedIds.length === 0}
-              onClick={() => setConfirmLinkOpen(true)}
-            >
-              {linkBusy ? 'Vinculando…' : 'Confirmar vínculo'}
-            </button>
-          </div>
         </div>
-      ) : null}
 
-      <h3 className="section__title">Lançamentos da fatura</h3>
-      {detail.transactions.length === 0 ? (
-        <p className="page__empty">
-          Nenhum lançamento nesta fatura ainda. Importe o CSV do cartão.
-        </p>
-      ) : (
-        <ul className="tx-rows tx-rows--invoice">
-          {detail.transactions.map((item) => (
-            <li key={item.id} className="tx-row tx-row--compact">
-              <span className="tx-row__date">{formatDayMonth(item.competenceDate)}</span>
-              <span className="tx-row__description" title={item.description}>
-                {item.description}
-              </span>
-              <span className="tx-row__category">
-                {item.category?.name ?? 'Sem categoria'}
-              </span>
-              <span
-                className={`tx-row__amount${
-                  item.amount < 0 ? ' tx-row__amount--expense' : ''
-                }`}
+        {payments.length === 0 ? (
+          <p className="page__empty">Nenhum pagamento vinculado ainda.</p>
+        ) : (
+          <ul className="tx-rows tx-rows--invoice">
+            {payments.map((payment) => (
+              <li
+                key={payment.id}
+                className="tx-row tx-row--compact tx-row--with-action"
               >
-                {formatAmount(item.amount)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+                <span className="tx-row__date">
+                  {formatDayMonth(payment.competenceDate)}
+                </span>
+                <span className="tx-row__description" title={payment.description}>
+                  {payment.description}
+                </span>
+                <span className="tx-row__category">
+                  {payment.account.label} · {payment.account.bank.name}
+                </span>
+                <span className="tx-row__amount tx-row__amount--expense">
+                  {formatAmount(payment.amount)}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm tx-row__action"
+                  disabled={unlinkBusy}
+                  aria-label={`Remover vínculo de ${payment.description}`}
+                  onClick={() => setUnlinkPaymentId(payment.id)}
+                >
+                  Remover vínculo
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <ConfirmModal
-        open={confirmLinkOpen}
-        title="Vincular pagamento"
-        description={`Vincular ${selectedIds.length} débito(s) a esta fatura? O lançamento passa a ser tratado como pagamento de fatura.`}
-        confirmLabel="Vincular"
+      <section className="surface-panel" aria-labelledby="invoice-tx-heading">
+        <div className="section__header">
+          <h2 id="invoice-tx-heading" className="section__title">
+            Lançamentos da fatura
+          </h2>
+        </div>
+        {detail.transactions.length === 0 ? (
+          <p className="page__empty">
+            Nenhum lançamento nesta fatura ainda. Importe o CSV do cartão.
+          </p>
+        ) : (
+          <ul className="tx-rows tx-rows--invoice">
+            {detail.transactions.map((item) => (
+              <li key={item.id} className="tx-row tx-row--compact">
+                <span className="tx-row__date">
+                  {formatDayMonth(item.competenceDate)}
+                </span>
+                <span className="tx-row__description" title={item.description}>
+                  {item.description}
+                </span>
+                <span className="tx-row__category">
+                  {item.category?.name ?? 'Sem categoria'}
+                </span>
+                <span
+                  className={`tx-row__amount${
+                    item.amount < 0 ? ' tx-row__amount--expense' : ''
+                  }`}
+                >
+                  {formatAmount(item.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <LinkInvoicePaymentModal
+        open={linking}
+        invoice={detail}
         busy={linkBusy}
         onCancel={() => {
           if (!linkBusy) {
-            setConfirmLinkOpen(false);
+            setLinking(false);
           }
         }}
-        onConfirm={() => void handleConfirmLink()}
+        onConfirm={(transactionIds) => void handleConfirmLink(transactionIds)}
       />
 
       <ConfirmModal
@@ -579,6 +432,7 @@ export function InvoiceDetailPanel({
         title="Remover vínculo do pagamento"
         description="Remover o vínculo deste débito com a fatura? Ele volta a ser despesa da conta e o caixa das compras é recalculado."
         confirmLabel="Remover vínculo"
+        variant="danger"
         busy={unlinkBusy}
         onCancel={() => {
           if (!unlinkBusy) {
@@ -587,6 +441,6 @@ export function InvoiceDetailPanel({
         }}
         onConfirm={() => void handleConfirmUnlink()}
       />
-    </section>
+    </>
   );
 }

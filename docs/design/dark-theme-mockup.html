@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mão de Vaca — Mockup dark theme</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #12151a;
+      --bg-elevated: #181c23;
+      --surface: #1e2430;
+      --surface-hover: #262d3b;
+      --border: #2c3444;
+      --border-strong: #3d4759;
+      --text: #e8eaef;
+      --text-muted: #9aa3b5;
+      --text-faint: #6b7385;
+      --accent: #3d9b6e;
+      --accent-hover: #4aad7c;
+      --accent-soft: rgba(61, 155, 110, 0.16);
+      --accent-text: #7dcea0;
+      --danger: #e07070;
+      --danger-soft: rgba(224, 112, 112, 0.14);
+      --warning: #d4a017;
+      --warning-soft: rgba(212, 160, 23, 0.14);
+      --info: #6b9fd4;
+      --sidebar-w: 220px;
+      --radius: 8px;
+      --radius-lg: 12px;
+      --shadow-modal: 0 24px 48px rgba(0, 0, 0, 0.45);
+      font-family: "DM Sans", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; }
+
+    /* —— Review chrome —— */
+    .review-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem 1rem;
+      padding: 0.75rem 1.25rem;
+      background: #0c0e12;
+      border-bottom: 1px solid var(--border);
+    }
+    .review-bar__label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-right: 0.25rem;
+    }
+    .review-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      flex: 1;
+    }
+    .review-chip {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      font: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .review-chip:hover { border-color: var(--border-strong); color: var(--text); }
+    .review-chip.is-active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+    .review-note {
+      font-size: 0.8rem;
+      color: var(--text-faint);
+      max-width: 28rem;
+    }
+
+    /* —— App shell —— */
+    .app {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      min-height: calc(100vh - 52px);
+    }
+    .sidebar {
+      background: var(--bg-elevated);
+      border-right: 1px solid var(--border);
+      padding: 1.25rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .brand {
+      margin: 0 0 1rem;
+      padding: 0.35rem 0.65rem;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .brand span { color: var(--accent-text); }
+    .nav { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+    .nav a {
+      display: block;
+      padding: 0.55rem 0.7rem;
+      border-radius: var(--radius);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.92rem;
+    }
+    .nav a:hover { background: var(--surface); color: var(--text); }
+    .nav a.is-active {
+      background: var(--accent-soft);
+      color: var(--accent-text);
+    }
+    .sidebar__foot {
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    .content {
+      padding: 1.75rem 2rem 2.5rem;
+      max-width: 960px;
+    }
+
+    /* —— Buttons (hierarchy) —— */
+    .btn {
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.9rem;
+      padding: 0.55rem 1rem;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      line-height: 1.2;
+    }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .btn--primary {
+      background: var(--accent);
+      color: #0c1210;
+      border-color: var(--accent);
+    }
+    .btn--primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+    .btn--secondary {
+      background: transparent;
+      color: var(--text);
+      border-color: var(--border-strong);
+    }
+    .btn--secondary:hover:not(:disabled) {
+      background: var(--surface);
+      border-color: var(--text-faint);
+    }
+    .btn--ghost {
+      background: transparent;
+      color: var(--text-muted);
+      border-color: transparent;
+      font-weight: 500;
+    }
+    .btn--ghost:hover:not(:disabled) {
+      color: var(--text);
+      background: var(--surface);
+      border-color: var(--border);
+    }
+    .btn--danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: transparent;
+    }
+    .btn--danger:hover:not(:disabled) {
+      border-color: var(--danger);
+    }
+    .btn--sm {
+      padding: 0.35rem 0.7rem;
+      font-size: 0.82rem;
+    }
+
+    /* —— Page primitives —— */
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .page-header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .page-header p {
+      margin: 0.25rem 0 0;
+      color: var(--text-muted);
+      font-size: 0.92rem;
+    }
+    .page-header__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .pill-group {
+      display: inline-flex;
+      padding: 3px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      gap: 2px;
+    }
+    .pill {
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .pill.is-active {
+      background: var(--accent);
+      color: #0c1210;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.15rem 1.25rem;
+    }
+    .panel + .panel { margin-top: 1rem; }
+    .panel__title {
+      margin: 0 0 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-faint);
+    }
+
+    .hero-metric {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0.15rem 0 0;
+    }
+    .hero-metric--neg { color: #f0a0a0; }
+    .meta { color: var(--text-muted); font-size: 0.88rem; }
+
+    .list { list-style: none; margin: 0; padding: 0; }
+    .list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .list-row:last-child { border-bottom: none; }
+    .list-row__title { font-weight: 600; display: block; }
+    .list-row__meta { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .list-row__actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+    .amount { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .amount--neg { color: #f0a0a0; }
+    .amount--pos { color: var(--accent-text); }
+
+    .bank-pill {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      margin-left: 0.4rem;
+    }
+    .status {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+    }
+    .status--open { background: var(--warning-soft); color: #e8c56a; }
+    .status--partial { background: rgba(107, 159, 212, 0.15); color: var(--info); }
+    .status--paid { background: var(--accent-soft); color: var(--accent-text); }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+      align-items: center;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .field input,
+    .field select,
+    .modal input,
+    .modal select {
+      font: inherit;
+      font-weight: 500;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.7rem;
+      min-width: 10rem;
+    }
+    .field input:focus,
+    .field select:focus,
+    .modal input:focus,
+    .modal select:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+      border-color: var(--accent);
+    }
+
+    .usage {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--bg);
+      overflow: hidden;
+      display: flex;
+      margin: 0.75rem 0 1rem;
+    }
+    .usage span { height: 100%; }
+    .cat-grid { display: grid; gap: 0.5rem; }
+    .cat-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+    }
+    .link {
+      color: var(--accent-text);
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .link:hover { text-decoration: underline; }
+
+    .empty {
+      text-align: center;
+      padding: 2.5rem 1rem;
+      color: var(--text-muted);
+    }
+    .empty p { margin: 0 0 1rem; }
+
+    .callout {
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.15rem;
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      font-size: 0.88rem;
+      margin-bottom: 1rem;
+    }
+    .callout strong { color: var(--text); }
+
+    /* —— Modal —— */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.62);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+      z-index: 200;
+    }
+    .overlay.is-open { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-modal);
+      padding: 1.35rem 1.4rem 1.25rem;
+    }
+    .modal h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+    .modal__desc {
+      margin: 0 0 1.15rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .modal__stack {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .modal__footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 1.35rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .screen { display: none; }
+    .screen.is-active { display: block; }
+
+    .login-wrap {
+      min-height: calc(100vh - 52px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(61, 155, 110, 0.12), transparent),
+        var(--bg);
+    }
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem 1.75rem;
+    }
+    .login-card h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.6rem;
+      letter-spacing: -0.03em;
+    }
+    .login-card .tagline {
+      margin: 0 0 1.5rem;
+      color: var(--text-muted);
+    }
+
+    .tree-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 0.35rem;
+      border-radius: var(--radius);
+    }
+    .tree-row:hover { background: var(--surface-hover); }
+    .swatch {
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: 0.7rem;
+      color: #111;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .indent-1 { padding-left: 0.35rem; }
+    .indent-2 { padding-left: 1.6rem; }
+
+    .dropzone {
+      border: 1.5px dashed var(--border-strong);
+      border-radius: var(--radius-lg);
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+    }
+    .dropzone strong { color: var(--text); display: block; margin-bottom: 0.25rem; }
+
+    .legend {
+      margin-top: 2rem;
+      padding: 1rem 1.15rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg-elevated);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .legend h3 {
+      margin: 0 0 0.5rem;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-faint);
+    }
+    .legend ul { margin: 0; padding-left: 1.1rem; }
+    .legend li { margin: 0.25rem 0; }
+    .legend code {
+      font-size: 0.8em;
+      background: var(--surface);
+      padding: 0.05rem 0.3rem;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 720px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .content { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="review-bar">
+    <span class="review-bar__label">Telas</span>
+    <div class="review-chips" id="chips"></div>
+    <p class="review-note">Mockup de avaliação — dark theme + shell unificado + criação via modal. Não é a app.</p>
+  </div>
+
+  <!-- Login (no shell) -->
+  <div class="screen" data-screen="login" id="screen-login">
+    <div class="login-wrap">
+      <div class="login-card">
+        <h1>Mão de <span style="color:var(--accent-text)">Vaca</span></h1>
+        <p class="tagline">Controle financeiro pessoal, sem surpresa.</p>
+        <div class="modal__stack">
+          <label class="field">Usuário<input value="marco" readonly /></label>
+          <label class="field">Senha<input type="password" value="••••••••" readonly /></label>
+          <button type="button" class="btn btn--primary" style="width:100%;margin-top:0.35rem" data-go="home">Entrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="app" id="app-shell">
+    <aside class="sidebar">
+      <p class="brand">Mão de <span>Vaca</span></p>
+      <nav class="nav" id="side-nav">
+        <a href="#" data-go="home" class="is-active">Visão geral</a>
+        <a href="#" data-go="lancamentos">Lançamentos</a>
+        <a href="#" data-go="importar">Importar</a>
+        <a href="#" data-go="contas">Contas</a>
+        <a href="#" data-go="cartoes">Cartões</a>
+        <a href="#" data-go="categorias">Categorias</a>
+        <a href="#" data-go="relatorios">Relatórios</a>
+      </nav>
+      <div class="sidebar__foot">
+        <button type="button" class="btn btn--ghost" style="width:100%" data-go="login">Sair</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- HOME -->
+      <section class="screen is-active" data-screen="home">
+        <header class="page-header">
+          <div>
+            <h1>Setembro 2026</h1>
+            <p>Resumo do mês no regime selecionado</p>
+          </div>
+          <div class="page-header__actions">
+            <div class="pill-group" role="group" aria-label="Regime">
+              <button type="button" class="pill is-active">Competência</button>
+              <button type="button" class="pill">Caixa</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="panel">
+          <p class="panel__title">Gastos do mês</p>
+          <p class="hero-metric hero-metric--neg">R$ 4.240,00</p>
+          <p class="meta">Receitas R$ 8.200 · Saldo líquido + R$ 3.960</p>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Por categoria</p>
+          <div class="usage" aria-hidden="true">
+            <span style="width:52%;background:#5b8def"></span>
+            <span style="width:31%;background:var(--accent)"></span>
+            <span style="width:13%;background:#c9a227"></span>
+            <span style="width:4%;background:#8b7ec8"></span>
+          </div>
+          <div class="cat-grid">
+            <div class="cat-row"><span>Moradia</span><span>R$ 2.100 · 52%</span></div>
+            <div class="cat-row"><span>Alimentação</span><span>R$ 1.240 · 31%</span></div>
+            <div class="cat-row"><span>Lazer</span><span>R$ 520 · 13%</span></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+            <p class="panel__title" style="margin:0">Recentes</p>
+            <a class="link" href="#" data-go="lancamentos">Ver todos</a>
+          </div>
+          <ul class="list">
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">iFood</span>
+                <div class="list-row__meta">02 set · Alimentação · Nubank</div>
+              </div>
+              <span class="amount amount--neg">− R$ 42,90</span>
+            </li>
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">Uber</span>
+                <div class="list-row__meta">01 set · Transporte · Nubank</div>
+              </div>
+              <span class="amount amount--neg">− R$ 18,50</span>
+            </li>
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">Salário</span>
+                <div class="list-row__meta">01 set · Receita · Itaú</div>
+              </div>
+              <span class="amount amount--pos">+ R$ 8.200,00</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Faturas em aberto</p>
+          <ul class="list">
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">Nubank · set/2026</span>
+                <div class="list-row__meta">Vence 10 out · <span class="status status--open">Aberta</span></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <span class="amount amount--neg">R$ 1.842,00</span>
+                <button type="button" class="btn btn--secondary btn--sm" data-go="cartoes">Abrir</button>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- LANÇAMENTOS -->
+      <section class="screen" data-screen="lancamentos">
+        <header class="page-header">
+          <div>
+            <h1>Lançamentos</h1>
+            <p>Movimentações do mês</p>
+          </div>
+          <div class="page-header__actions">
+            <div class="pill-group">
+              <button type="button" class="pill is-active">Competência</button>
+              <button type="button" class="pill">Caixa</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="filters">
+          <label class="field">Mês
+            <select><option>Setembro 2026</option><option>Agosto 2026</option></select>
+          </label>
+          <label class="field">Origem
+            <select><option>Todas</option><option>Nubank CC</option><option>Itaú</option></select>
+          </label>
+          <label class="field">Busca
+            <input placeholder="Descrição…" />
+          </label>
+          <button type="button" class="btn btn--secondary btn--sm" style="align-self:flex-end">Filtros</button>
+        </div>
+
+        <div class="panel" style="padding-top:0.35rem;padding-bottom:0.35rem">
+          <ul class="list">
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">iFood</span>
+                <div class="list-row__meta">02 set · Alimentação › Delivery · Nubank</div>
+              </div>
+              <div class="list-row__actions">
+                <span class="amount amount--neg">− R$ 42,90</span>
+                <button type="button" class="btn btn--ghost btn--sm">Categoria</button>
+                <button type="button" class="btn btn--ghost btn--sm">Desativar</button>
+              </div>
+            </li>
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">Pagamento fatura Nubank</span>
+                <div class="list-row__meta">05 set · Transferência · Conta corrente</div>
+              </div>
+              <div class="list-row__actions">
+                <span class="amount">− R$ 1.200,00</span>
+                <button type="button" class="btn btn--secondary btn--sm">Vincular</button>
+              </div>
+            </li>
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">PIX para poupança</span>
+                <div class="list-row__meta">03 set · Sem categoria · Conta corrente</div>
+              </div>
+              <div class="list-row__actions">
+                <span class="amount">− R$ 500,00</span>
+                <button type="button" class="btn btn--secondary btn--sm">Transferência</button>
+                <button type="button" class="btn btn--ghost btn--sm">Categoria</button>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="legend">
+          <h3>Hierarquia de ações (exemplo)</h3>
+          <ul>
+            <li><code>Primary</code> — CTA de criação no cabeçalho (verde sólido, texto escuro)</li>
+            <li><code>Secondary</code> — ação importante na linha (borda visível)</li>
+            <li><code>Ghost</code> — ação secundária; no hover ganha fundo + borda para não sumir</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- IMPORTAR -->
+      <section class="screen" data-screen="importar">
+        <header class="page-header">
+          <div>
+            <h1>Importar</h1>
+            <p>CSV de extrato ou fatura</p>
+          </div>
+        </header>
+
+        <div class="pill-group" style="margin-bottom:1.25rem">
+          <button type="button" class="pill is-active">Extrato de conta</button>
+          <button type="button" class="pill">Fatura de cartão</button>
+        </div>
+
+        <div class="panel">
+          <div class="modal__stack">
+            <label class="field">Conta
+              <select><option>Nubank CC</option><option>Conta corrente · Itaú</option></select>
+            </label>
+            <label class="field">Parser
+              <select><option>Padrão MVP</option></select>
+            </label>
+            <div class="dropzone">
+              <strong>Solte o CSV aqui</strong>
+              ou clique para escolher o arquivo
+            </div>
+            <div style="display:flex;gap:0.5rem;justify-content:flex-end">
+              <button type="button" class="btn btn--primary">Pré-visualizar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout" style="margin-top:1rem">
+          <strong>Importação</strong> permanece inline (fluxo multi-etapas). Criar fatura faltante abre <strong>modal</strong>, não formulário embutido.
+          <div style="margin-top:0.75rem">
+            <button type="button" class="btn btn--secondary btn--sm" id="open-invoice-modal">Nova fatura…</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTAS -->
+      <section class="screen" data-screen="contas">
+        <header class="page-header">
+          <div>
+            <h1>Contas</h1>
+            <p>Contas bancárias de movimentação</p>
+          </div>
+          <div class="page-header__actions">
+            <button type="button" class="btn btn--secondary btn--sm">Mostrar inativos</button>
+            <button type="button" class="btn btn--primary" id="open-account-modal">Adicionar conta</button>
+          </div>
+        </header>
+
+        <div class="callout">
+          Lista limpa. O formulário de criação <strong>não</strong> aparece na página — só no modal ao clicar no CTA.
+        </div>
+
+        <div class="panel" style="padding-top:0.35rem;padding-bottom:0.35rem">
+          <ul class="list">
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">Nubank CC <span class="bank-pill">Nubank</span></span>
+              </div>
+              <div class="list-row__actions">
+                <button type="button" class="btn btn--ghost btn--sm">Editar</button>
+                <button type="button" class="btn btn--danger btn--sm">Desativar</button>
+              </div>
+            </li>
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">Conta corrente <span class="bank-pill">Itaú</span></span>
+              </div>
+              <div class="list-row__actions">
+                <button type="button" class="btn btn--ghost btn--sm">Editar</button>
+                <button type="button" class="btn btn--danger btn--sm">Desativar</button>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- CARTÕES -->
+      <section class="screen" data-screen="cartoes">
+        <header class="page-header">
+          <div>
+            <h1>Cartões</h1>
+            <p>Faturas e saldo em aberto</p>
+          </div>
+          <div class="page-header__actions">
+            <button type="button" class="btn btn--primary" id="open-card-modal">Adicionar cartão</button>
+          </div>
+        </header>
+
+        <div class="pill-group" style="margin-bottom:1.25rem">
+          <button type="button" class="pill is-active">Nubank</button>
+          <button type="button" class="pill">Inter</button>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Fatura atual · set/2026</p>
+          <p class="hero-metric hero-metric--neg">R$ 1.842,00</p>
+          <p class="meta">Vence 10 out · <span class="status status--open">Aberta</span></p>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+            <p class="panel__title" style="margin:0">Faturas</p>
+            <button type="button" class="btn btn--secondary btn--sm" id="open-invoice-modal-2">Nova fatura</button>
+          </div>
+          <ul class="list">
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">set/2026 <span class="status status--open">Aberta</span></span>
+                <div class="list-row__meta">Vence 10 out · Total R$ 1.842</div>
+              </div>
+              <button type="button" class="btn btn--secondary btn--sm">Ver</button>
+            </li>
+            <li class="list-row">
+              <div>
+                <span class="list-row__title">ago/2026 <span class="status status--paid">Quitada</span></span>
+                <div class="list-row__meta">Venceu 10 set · Total R$ 2.104</div>
+              </div>
+              <button type="button" class="btn btn--ghost btn--sm">Ver</button>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- CATEGORIAS -->
+      <section class="screen" data-screen="categorias">
+        <header class="page-header">
+          <div>
+            <h1>Categorias</h1>
+            <p>Árvore de gastos e receitas</p>
+          </div>
+          <div class="page-header__actions">
+            <button type="button" class="btn btn--primary" id="open-category-modal">Nova categoria</button>
+          </div>
+        </header>
+
+        <div class="panel">
+          <div class="tree-row indent-1">
+            <span class="swatch" style="background:#5b8def">⌂</span>
+            <div style="flex:1">
+              <strong>Moradia</strong>
+              <span class="bank-pill">Gasto</span>
+            </div>
+            <button type="button" class="btn btn--secondary btn--sm" data-subcat>Nova sub</button>
+            <button type="button" class="btn btn--ghost btn--sm">Editar</button>
+          </div>
+          <div class="tree-row indent-2">
+            <span class="swatch" style="background:#7aa6f5">≈</span>
+            <div style="flex:1"><span>Aluguel</span></div>
+            <button type="button" class="btn btn--ghost btn--sm">Editar</button>
+          </div>
+          <div class="tree-row indent-1">
+            <span class="swatch" style="background:var(--accent)">🍽</span>
+            <div style="flex:1">
+              <strong>Alimentação</strong>
+              <span class="bank-pill">Gasto</span>
+            </div>
+            <button type="button" class="btn btn--secondary btn--sm" data-subcat>Nova sub</button>
+            <button type="button" class="btn btn--ghost btn--sm">Editar</button>
+          </div>
+          <div class="tree-row indent-1">
+            <span class="swatch" style="background:#c9a227">+</span>
+            <div style="flex:1">
+              <strong>Receita</strong>
+              <span class="bank-pill">Renda</span>
+            </div>
+            <button type="button" class="btn btn--secondary btn--sm" data-subcat>Nova sub</button>
+            <button type="button" class="btn btn--ghost btn--sm">Editar</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RELATÓRIOS -->
+      <section class="screen" data-screen="relatorios">
+        <header class="page-header">
+          <div>
+            <h1>Relatórios</h1>
+            <p>Indicadores do período</p>
+          </div>
+          <div class="page-header__actions">
+            <div class="pill-group">
+              <button type="button" class="pill is-active">Competência</button>
+              <button type="button" class="pill">Caixa</button>
+            </div>
+          </div>
+        </header>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1rem">
+          <div class="panel">
+            <p class="panel__title">Gastos</p>
+            <p style="margin:0;font-size:1.35rem;font-weight:700">R$ 4.240</p>
+          </div>
+          <div class="panel">
+            <p class="panel__title">Maior categoria</p>
+            <p style="margin:0;font-size:1.35rem;font-weight:700">Moradia</p>
+          </div>
+          <div class="panel">
+            <p class="panel__title">vs mês anterior</p>
+            <p style="margin:0;font-size:1.35rem;font-weight:700;color:var(--accent-text)">−8%</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <p class="panel__title">Evolução (6 meses)</p>
+          <div style="display:flex;align-items:flex-end;gap:0.5rem;height:120px;margin-top:0.5rem">
+            <div style="flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;height:45%"></div>
+            <div style="flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;height:62%"></div>
+            <div style="flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;height:55%"></div>
+            <div style="flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;height:78%"></div>
+            <div style="flex:1;background:var(--accent-soft);border-radius:4px 4px 0 0;height:70%"></div>
+            <div style="flex:1;background:var(--accent);border-radius:4px 4px 0 0;height:88%"></div>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.5rem;font-size:0.75rem;color:var(--text-faint)">
+            <span style="flex:1;text-align:center">Abr</span>
+            <span style="flex:1;text-align:center">Mai</span>
+            <span style="flex:1;text-align:center">Jun</span>
+            <span style="flex:1;text-align:center">Jul</span>
+            <span style="flex:1;text-align:center">Ago</span>
+            <span style="flex:1;text-align:center">Set</span>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: nova conta -->
+  <div class="overlay" id="modal-account" role="dialog" aria-modal="true" aria-labelledby="modal-account-title">
+    <div class="modal">
+      <h2 id="modal-account-title">Nova conta</h2>
+      <p class="modal__desc">Conta bancária usada como origem de lançamentos.</p>
+      <div class="modal__stack">
+        <label class="field">Apelido<input placeholder="Ex.: Conta corrente" /></label>
+        <label class="field">Banco
+          <select><option>Nubank</option><option>Itaú</option><option>Inter</option></select>
+        </label>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="button" class="btn btn--primary" data-close>Adicionar conta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: novo cartão -->
+  <div class="overlay" id="modal-card" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Novo cartão</h2>
+      <p class="modal__desc">Cartão de crédito vinculado a um banco.</p>
+      <div class="modal__stack">
+        <label class="field">Apelido<input placeholder="Ex.: Nubank Roxinho" /></label>
+        <label class="field">Banco
+          <select><option>Nubank</option><option>Inter</option></select>
+        </label>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="button" class="btn btn--primary" data-close>Adicionar cartão</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: nova categoria -->
+  <div class="overlay" id="modal-category" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Nova categoria</h2>
+      <p class="modal__desc">Categoria raiz (folha ou pai de subcategorias).</p>
+      <div class="modal__stack">
+        <label class="field">Nome<input placeholder="Ex.: Saúde" /></label>
+        <label class="field">Tipo
+          <select><option>Gasto</option><option>Renda</option></select>
+        </label>
+        <label class="field">Cor<input type="color" value="#3d9b6e" style="padding:0.2rem;height:2.4rem" /></label>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="button" class="btn btn--primary" data-close>Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: subcategoria -->
+  <div class="overlay" id="modal-subcat" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Nova subcategoria</h2>
+      <p class="modal__desc">Em <strong>Moradia</strong></p>
+      <div class="modal__stack">
+        <label class="field">Nome<input placeholder="Ex.: Condomínio" /></label>
+        <label class="field">Cor<input type="color" value="#5b8def" style="padding:0.2rem;height:2.4rem" /></label>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="button" class="btn btn--primary" data-close>Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: nova fatura -->
+  <div class="overlay" id="modal-invoice" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Nova fatura</h2>
+      <p class="modal__desc">Cria a fatura e seleciona no formulário de importação.</p>
+      <div class="modal__stack">
+        <label class="field">Mês de referência<input type="month" value="2026-09" /></label>
+        <label class="field">Vencimento<input type="date" value="2026-10-10" /></label>
+      </div>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--ghost" data-close>Cancelar</button>
+        <button type="button" class="btn btn--primary" data-close>Criar fatura</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCREENS = [
+      { id: "login", label: "Login", shell: false },
+      { id: "home", label: "Visão geral", shell: true },
+      { id: "lancamentos", label: "Lançamentos", shell: true },
+      { id: "importar", label: "Importar", shell: true },
+      { id: "contas", label: "Contas", shell: true },
+      { id: "cartoes", label: "Cartões", shell: true },
+      { id: "categorias", label: "Categorias", shell: true },
+      { id: "relatorios", label: "Relatórios", shell: true },
+    ];
+
+    const chips = document.getElementById("chips");
+    const appShell = document.getElementById("app-shell");
+
+    SCREENS.forEach((s) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "review-chip" + (s.id === "home" ? " is-active" : "");
+      b.textContent = s.label;
+      b.dataset.go = s.id;
+      chips.appendChild(b);
+    });
+
+    function go(id) {
+      const meta = SCREENS.find((s) => s.id === id);
+      if (!meta) return;
+
+      document.querySelectorAll(".review-chip").forEach((el) => {
+        el.classList.toggle("is-active", el.dataset.go === id);
+      });
+
+      document.querySelectorAll(".screen").forEach((el) => {
+        el.classList.toggle("is-active", el.dataset.screen === id);
+      });
+
+      appShell.style.display = meta.shell ? "grid" : "none";
+
+      document.querySelectorAll("#side-nav a").forEach((a) => {
+        a.classList.toggle("is-active", a.dataset.go === id);
+      });
+    }
+
+    function openModal(id) {
+      document.getElementById(id)?.classList.add("is-open");
+    }
+    function closeModals() {
+      document.querySelectorAll(".overlay.is-open").forEach((el) => el.classList.remove("is-open"));
+    }
+
+    document.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-go]");
+      if (t) {
+        e.preventDefault();
+        go(t.dataset.go);
+        return;
+      }
+      if (e.target.closest("[data-close]")) {
+        closeModals();
+        return;
+      }
+      if (e.target.classList.contains("overlay")) {
+        closeModals();
+      }
+      if (e.target.closest("#open-account-modal")) openModal("modal-account");
+      if (e.target.closest("#open-card-modal")) openModal("modal-card");
+      if (e.target.closest("#open-category-modal")) openModal("modal-category");
+      if (e.target.closest("[data-subcat]")) openModal("modal-subcat");
+      if (e.target.closest("#open-invoice-modal, #open-invoice-modal-2")) openModal("modal-invoice");
+
+      const pill = e.target.closest(".pill");
+      if (pill && pill.parentElement?.classList.contains("pill-group")) {
+        pill.parentElement.querySelectorAll(".pill").forEach((p) => p.classList.remove("is-active"));
+        pill.classList.add("is-active");
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeModals();
+    });
+
+    go("home");
+  </script>
+</body>
+</html>

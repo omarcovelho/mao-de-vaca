@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   flattenCategoryLeaves,
   type CategoryLeafOption,
@@ -7,18 +7,17 @@ import {
 import { ConfirmModal } from '../../components/confirm-modal';
 import { MapExistingCategoryModal } from '../../components/map-existing-category-modal';
 import { PageHeader } from '../../components/page-header';
-import {
-  AccountOriginIcon,
-  CardOriginIcon,
-} from '../../components/origin-icon';
 import { RegimeToggle } from '../../components/regime-toggle';
 import { SearchableSelect } from '../../components/searchable-select';
 import { useToast } from '../../components/toast';
 import { listAccounts } from '../accounts/api';
 import type { Origin } from '../accounts/types';
 import { listCategories } from '../categories/api';
+import { TrashGlyph } from '../categories/category-icons';
 import * as transactionsApi from './api';
 import { LinkTransferModal } from './link-transfer-modal';
+import { TxCategoryChip } from './tx-category-chip';
+import { TxOrigin } from './tx-origin';
 import { formatMonthLabel, monthBounds, shiftMonth, toMonthKey } from './month';
 import { useRegime } from './regime-context';
 import type { TransactionItem } from './types';
@@ -431,8 +430,13 @@ export function TransactionsPage() {
                 </span>
                 <button
                   type="button"
-                  className="tx-row__category linkish"
+                  className="tx-row__category"
                   disabled={busyId === item.id}
+                  aria-label={
+                    item.category
+                      ? `Alterar categoria ${item.category.name}`
+                      : 'Definir categoria'
+                  }
                   onClick={() =>
                     setCategoryEdit({
                       id: item.id,
@@ -443,47 +447,17 @@ export function TransactionsPage() {
                     })
                   }
                 >
-                  {item.category?.name ?? 'Sem categoria'}
-                  {item.category?.systemKey === 'ACCOUNT_TRANSFER' &&
-                  !item.transferCounterpartId
-                    ? ' · sem vínculo'
-                    : ''}
+                  <TxCategoryChip
+                    category={item.category}
+                    suffix={
+                      item.category?.systemKey === 'ACCOUNT_TRANSFER' &&
+                      !item.transferCounterpartId
+                        ? 'sem vínculo'
+                        : undefined
+                    }
+                  />
                 </button>
-                {item.card && item.invoiceId ? (
-                  <Link
-                    to={`/cartoes?invoiceId=${item.invoiceId}`}
-                    className="tx-row__account tx-row__account--link"
-                  >
-                    <CardOriginIcon className="tx-row__origin-icon" />
-                    <span className="tx-row__account-label">{item.card.label}</span>
-                    <span className="bank-pill">{item.card.bank.name}</span>
-                  </Link>
-                ) : item.card ? (
-                  <span className="tx-row__account">
-                    <CardOriginIcon className="tx-row__origin-icon" />
-                    <span className="tx-row__account-label">{item.card.label}</span>
-                    <span className="bank-pill">{item.card.bank.name}</span>
-                  </span>
-                ) : item.account &&
-                  item.type === 'INVOICE_PAYMENT' &&
-                  item.invoiceId ? (
-                  <Link
-                    to={`/cartoes?invoiceId=${item.invoiceId}`}
-                    className="tx-row__account tx-row__account--link"
-                  >
-                    <AccountOriginIcon className="tx-row__origin-icon" />
-                    <span className="tx-row__account-label">{item.account.label}</span>
-                    <span className="bank-pill">{item.account.bank.name}</span>
-                  </Link>
-                ) : item.account ? (
-                  <span className="tx-row__account">
-                    <AccountOriginIcon className="tx-row__origin-icon" />
-                    <span className="tx-row__account-label">{item.account.label}</span>
-                    <span className="bank-pill">{item.account.bank.name}</span>
-                  </span>
-                ) : (
-                  <span className="tx-row__account tx-row__account--empty">—</span>
-                )}
+                <TxOrigin item={item} />
                 <span
                   className={`tx-row__amount${
                     item.amount < 0 || item.type === 'EXPENSE'
@@ -495,11 +469,12 @@ export function TransactionsPage() {
                 </span>
                 <button
                   type="button"
-                  className="btn btn--ghost btn--compact tx-row__action"
+                  className="btn btn--ghost btn--icon btn--icon-danger tx-row__action"
                   disabled={busyId === item.id}
+                  aria-label={`Desativar ${item.description}`}
                   onClick={() => setDeactivateId(item.id)}
                 >
-                  Desativar
+                  <TrashGlyph />
                 </button>
               </li>
             ))}

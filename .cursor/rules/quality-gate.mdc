@@ -1,5 +1,5 @@
 ---
-description: Mão de Vaca quality gates — TDD on server; UI tests after implementation
+description: Mão de Vaca quality gates — TDD on server; UI implement-only (no Vitest)
 alwaysApply: true
 ---
 
@@ -17,17 +17,16 @@ alwaysApply: true
 - **Jest:** services de domínio, controllers HTTP, parsers de importação, deduplicação, cálculo de saldo/status de fatura, filtros por regime (`competence` / `cash`), guards de auth e `userId`.
 - Mock de I/O externo (PostgreSQL em testes de integração pode usar DB de teste ou repositório in-memory — nunca produção). Sem chamadas reais a serviços externos em testes unitários.
 
-### `src/ui/` — Implement first, test after
+### `src/ui/` — Implement only
 
 - **Não** exigir Red → Green → Refactor na UI.
-- Implementar a mudança; ao terminar, escrever ou atualizar testes Vitest que cubram o comportamento entregue.
-- Cobrir API client, hooks, componentes e fluxos não triviais (onboarding, formulário de importação por modo com mapeamento de categorias, toggle de regime, confirmações/modais relevantes).
-- Suíte Vitest deve ficar verde antes do DoD.
+- **Não** escrever ou manter testes Vitest na UI (suíte removida).
+- Validar UI por lint + `build:ui` (e demo manual). Comportamento de domínio continua coberto no `server/`.
 
 ### Geral
 
 - **E2E:** fora do escopo, salvo pedido explícito do usuário.
-- Priorizar testes alinhados ao **resultado do épico/feature** — não camadas horizontais isoladas sem valor.
+- Priorizar testes alinhados ao **resultado do épico/feature** no **server** — não camadas horizontais isoladas sem valor.
 
 ## O que testar no domínio (server)
 
@@ -42,7 +41,7 @@ alwaysApply: true
 
 ## Definition of Done
 
-- [ ] Server: teste falhando primeiro; UI: testes escritos/atualizados após a implementação; suíte completa verde
+- [ ] Server: teste falhando primeiro; suíte Jest verde. UI: lint + build (sem Vitest)
 - [ ] Demoável: app sobe (`server` + `ui` em dev, ou build único em prod)
 - [ ] Rastreia [docs/PROJECT_DEFINITION.MD](docs/PROJECT_DEFINITION.MD) (§3, §5, §6) ou [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); desvios documentados
 - [ ] Regras de negócio no `server/`; UI não duplica contabilização (regimes, saldos, dedup)

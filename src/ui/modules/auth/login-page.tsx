@@ -32,8 +32,12 @@ export function LoginPage() {
     <div className="login-page">
       <div className="login-page__inner">
         <div className="login-page__brand">
-          <h1 className="login-page__brand-title">Mão de Vaca</h1>
-          <p className="login-page__brand-tagline">Seu controle financeiro pessoal</p>
+          <h1 className="login-page__brand-title">
+            Mão de <span className="login-page__brand-accent">Vaca</span>
+          </h1>
+          <p className="login-page__brand-tagline">
+            Controle financeiro pessoal, sem surpresa.
+          </p>
         </div>
         <div className="login-card">
           <h2 className="login-card__title">Entrar</h2>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CategoryIcon } from '../categories/category-icons';
+import { TxCategoryChip } from '../transactions/tx-category-chip';
 import type { ByCategoryItem } from './types';
 
 function formatMoney(value: number): string {
@@ -49,15 +49,22 @@ function CategoryBreakdownNode({
   const expanded = expandedIds.has(key);
   const href = !hasChildren && leafTo ? leafTo(item) : null;
 
-  const name = href ? (
-    <Link
-      to={href}
-      className="category-breakdown__name category-breakdown__name--link"
-    >
-      {item.name}
+  const chip = (
+    <TxCategoryChip
+      category={{
+        name: item.name,
+        color: item.color,
+        icon: item.icon,
+      }}
+    />
+  );
+
+  const label = href ? (
+    <Link to={href} className="category-breakdown__chip-link">
+      {chip}
     </Link>
   ) : (
-    <span className="category-breakdown__name">{item.name}</span>
+    chip
   );
 
   return (
@@ -88,14 +95,7 @@ function CategoryBreakdownNode({
         )}
 
         <div className="category-breakdown__meta">
-          <span
-            className="category-swatch category-swatch--sm"
-            style={{ ['--swatch' as string]: item.color }}
-            aria-hidden
-          >
-            <CategoryIcon icon={item.icon} />
-          </span>
-          {name}
+          {label}
           <span className="category-breakdown__percent">
             {formatPercent(item.percent)}
           </span>

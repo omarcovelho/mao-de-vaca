@@ -43,7 +43,6 @@ jobs:
               - 'package.json'
               - 'package-lock.json'
               - 'eslint.config.mjs'
-              - 'vitest.config.ts'
             workflows:
               - '.github/**'
 

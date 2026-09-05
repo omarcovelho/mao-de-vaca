@@ -153,7 +153,77 @@ export function CategoryIcon({
   className?: string;
 }) {
   const Render = ICONS[icon] ?? ICONS.tag;
-  return <span className={className}>{Render({})}</span>;
+  return Render({ className });
+}
+
+export function PlusGlyph(props: IconProps) {
+  return (
+    <IconShell {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </IconShell>
+  );
+}
+
+export function PencilGlyph(props: IconProps) {
+  return (
+    <IconShell {...props}>
+      <path d="M12.5 6.5 17.5 11.5" />
+      <path d="M4 20h4.5L19 9.5a2.1 2.1 0 0 0-3-3L5.5 17 4 20z" />
+    </IconShell>
+  );
+}
+
+export function TrashGlyph(props: IconProps) {
+  return (
+    <IconShell {...props}>
+      <path d="M4 7h16" />
+      <path d="M9 7V5h6v2" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </IconShell>
+  );
+}
+
+type CategoryIconPickerProps = {
+  value: string;
+  color: string;
+  labelledBy: string;
+  onChange: (icon: string) => void;
+};
+
+export function CategoryIconPicker({
+  value,
+  color,
+  labelledBy,
+  onChange,
+}: CategoryIconPickerProps) {
+  return (
+    <div
+      className="category-icon-grid"
+      role="radiogroup"
+      aria-labelledby={labelledBy}
+      style={{ ['--swatch' as string]: color }}
+    >
+      {CATEGORY_ICON_OPTIONS.map((option) => {
+        const selected = value === option.key;
+        return (
+          <button
+            key={option.key}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            aria-label={option.label}
+            className={`category-icon-grid__option${
+              selected ? ' category-icon-grid__option--selected' : ''
+            }`}
+            onClick={() => onChange(option.key)}
+          >
+            <CategoryIcon icon={option.key} />
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export const KIND_LABELS: Record<string, string> = {
