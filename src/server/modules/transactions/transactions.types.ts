@@ -4,8 +4,11 @@ export type ListTransactionsQuery = {
   regime?: string;
   from?: string;
   to?: string;
-  categoryId?: string;
+  /** Single id or repeated query params; each expands to subtree when parent. */
+  categoryId?: string | string[];
   accountId?: string;
+  cardId?: string;
+  q?: string;
   includeInactive?: string;
 };
 

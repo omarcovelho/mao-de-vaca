@@ -1,7 +1,7 @@
 # Mão de Vaca — Arquitetura do MVP
 
 **Status:** Rascunho para planejamento de implementação  
-**Última atualização:** 2026-09-04  
+**Última atualização:** 2026-09-05  
 **Fonte de verdade do produto:** [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD)
 
 Este documento descreve *como* o MVP é construído em alto nível. Histórias de usuário, épicos e tarefas devem rastrear até aqui e até a definição de produto (especialmente §3, §5 e §6).
@@ -433,7 +433,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Lançamentos
 
-- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId`, `accountId`, `includeInactive`; item inclui `category` nullable, `transferCounterpartId` e `category.systemKey`
+- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId` (repetível; folha = igualdade; pai = subárvore; vários = união), `accountId`, `cardId`, `q` (substring case-insensitive em `description`), `includeInactive`; item inclui `category` nullable, `transferCounterpartId` e `category.systemKey`
 - `GET /api/transactions/transfer-candidates` — candidatos a vínculo (`transactionId`, `amount?`)
 - `PATCH /api/transactions/:id` — `categoryId` (folha; NON_EXPENSE aplica comportamento de sistema), `counterpartTransactionId` (obrigatório para `ACCOUNT_TRANSFER`), e/ou `active`
 
@@ -556,3 +556,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-03 | Faturas: `PATCH /api/invoices/:id` para editar `dueDate` |
 | 2026-09-04 | NON_EXPENSE de sistema (`systemKey`) + `TransferLink`; importação não atribui NON_EXPENSE; pagamento de fatura seta categoria automaticamente |
 | 2026-09-05 | V7.5 slice A: `DELETE` pagamento; `categoryId` opcional; bucket “Sem categoria” em by-category |
+| 2026-09-05 | V7.5 slice D: `GET /api/transactions` com `cardId`, `q`, `categoryId` de pai = subárvore |

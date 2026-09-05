@@ -1,16 +1,19 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  flattenCategoryFilterOptions,
   flattenCategoryLeaves,
   type CategoryLeafOption,
 } from '../../components/category-leaves';
 import { ConfirmModal } from '../../components/confirm-modal';
+import { FormModal } from '../../components/form-modal';
 import { MapExistingCategoryModal } from '../../components/map-existing-category-modal';
 import { PageHeader } from '../../components/page-header';
 import { RegimeToggle } from '../../components/regime-toggle';
+import { SearchableMultiSelect } from '../../components/searchable-multi-select';
 import { SearchableSelect } from '../../components/searchable-select';
 import { useToast } from '../../components/toast';
-import { listAccounts } from '../accounts/api';
+import { listAccounts, listCards } from '../accounts/api';
 import type { Origin } from '../accounts/types';
 import { listCategories } from '../categories/api';
 import { TrashGlyph } from '../categories/category-icons';
@@ -41,6 +44,14 @@ function formatDay(isoDate: string): string {
   }).format(new Date(year, month - 1, day));
 }
 
+function formatShortDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(new Date(year, month - 1, day));
+}
+
 function initialMonth(searchParams: URLSearchParams): string {
   const fromQuery = searchParams.get('month');
   if (fromQuery && MONTH_RE.test(fromQuery)) {
@@ -49,6 +60,14 @@ function initialMonth(searchParams: URLSearchParams): string {
   return toMonthKey();
 }
 
+type FilterDraft = {
+  categoryIds: string[];
+  accountId: string;
+  cardId: string;
+  customFrom: string;
+  customTo: string;
+};
+
 export function TransactionsPage() {
   const toast = useToast();
   const { regime, setRegime } = useRegime();
@@ -56,13 +75,19 @@ export function TransactionsPage() {
   const [month, setMonth] = useState(() => initialMonth(searchParams));
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [categoryId, setCategoryId] = useState(
-    () => searchParams.get('categoryId') ?? '',
+  const [categoryIds, setCategoryIds] = useState<string[]>(() =>
+    searchParams.getAll('categoryId').filter(Boolean),
   );
   const [accountId, setAccountId] = useState('');
+  const [cardId, setCardId] = useState('');
+  const [q, setQ] = useState('');
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [accounts, setAccounts] = useState<Origin[]>([]);
+  const [cards, setCards] = useState<Origin[]>([]);
   const [leaves, setLeaves] = useState<CategoryLeafOption[]>([]);
+  const [categoryFilterOptions, setCategoryFilterOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [categoryEdit, setCategoryEdit] = useState<{
@@ -78,6 +103,57 @@ export function TransactionsPage() {
   } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [draft, setDraft] = useState<FilterDraft>({
+    categoryIds: [],
+    accountId: '',
+    cardId: '',
+    customFrom: '',
+    customTo: '',
+  });
+
+  function changeMonth(next: string) {
+    setMonth(next);
+    setCustomFrom('');
+    setCustomTo('');
+  }
+
+  function openFilters() {
+    setDraft({
+      categoryIds,
+      accountId,
+      cardId,
+      customFrom,
+      customTo,
+    });
+    setFiltersOpen(true);
+  }
+
+  function applyFilters(event: FormEvent) {
+    event.preventDefault();
+    if (draft.customFrom && draft.customTo && draft.customFrom > draft.customTo) {
+      toast.error('A data inicial deve ser anterior ou igual à final.');
+      return;
+    }
+    const nextAccountId = draft.accountId;
+    const nextCardId = nextAccountId ? '' : draft.cardId;
+    setCategoryIds(draft.categoryIds);
+    setAccountId(nextAccountId);
+    setCardId(nextCardId);
+    setCustomFrom(draft.customFrom);
+    setCustomTo(draft.customTo);
+    setFiltersOpen(false);
+  }
+
+  function clearDraft() {
+    setDraft({
+      categoryIds: [],
+      accountId: '',
+      cardId: '',
+      customFrom: '',
+      customTo: '',
+    });
+  }
 
   useEffect(() => {
     const nextMonth = searchParams.get('month');
@@ -86,9 +162,8 @@ export function TransactionsPage() {
       setCustomFrom('');
       setCustomTo('');
     }
-    const nextCategory = searchParams.get('categoryId');
-    if (nextCategory !== null) {
-      setCategoryId(nextCategory);
+    if (searchParams.has('categoryId')) {
+      setCategoryIds(searchParams.getAll('categoryId').filter(Boolean));
     }
   }, [searchParams]);
 
@@ -103,15 +178,18 @@ export function TransactionsPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const [accountList, tree] = await Promise.all([
+        const [accountList, cardList, tree] = await Promise.all([
           listAccounts(),
+          listCards(),
           listCategories(),
         ]);
         if (cancelled) {
           return;
         }
         setAccounts(accountList);
+        setCards(cardList);
         setLeaves(flattenCategoryLeaves(tree));
+        setCategoryFilterOptions(flattenCategoryFilterOptions(tree));
       } catch {
         if (!cancelled) {
           setError('Não foi possível carregar filtros.');
@@ -133,8 +211,10 @@ export function TransactionsPage() {
           regime,
           from: period.from,
           to: period.to,
-          categoryId: categoryId || undefined,
+          categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
           accountId: accountId || undefined,
+          cardId: cardId || undefined,
+          q: q.trim() || undefined,
         });
         if (!cancelled) {
           setItems(response.items);
@@ -153,12 +233,7 @@ export function TransactionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [regime, period.from, period.to, categoryId, accountId]);
-
-  const categoryFilterOptions = useMemo(
-    () => leaves.map((leaf) => ({ value: leaf.value, label: leaf.label })),
-    [leaves],
-  );
+  }, [regime, period.from, period.to, categoryIds, accountId, cardId, q]);
 
   const accountFilterOptions = useMemo(
     () =>
@@ -167,6 +242,15 @@ export function TransactionsPage() {
         label: account.label,
       })),
     [accounts],
+  );
+
+  const cardFilterOptions = useMemo(
+    () =>
+      cards.map((card) => ({
+        value: card.id,
+        label: card.label,
+      })),
+    [cards],
   );
 
   async function handleCategoryChange(
@@ -285,16 +369,56 @@ export function TransactionsPage() {
     }
   }
 
-  function onApplyFilters(event: FormEvent) {
-    event.preventDefault();
-  }
-
-  function clearExtraFilters() {
-    setCategoryId('');
+  function clearAdvancedFilters() {
+    setCategoryIds([]);
     setAccountId('');
+    setCardId('');
     setCustomFrom('');
     setCustomTo('');
   }
+
+  function clearDraft() {
+    setDraft({
+      categoryIds: [],
+      accountId: '',
+      cardId: '',
+      customFrom: '',
+      customTo: '',
+    });
+  }
+
+  function removeCategoryFilter(id: string) {
+    setCategoryIds((current) => current.filter((item) => item !== id));
+  }
+
+  const accountLabel = useMemo(
+    () => accounts.find((item) => item.id === accountId)?.label,
+    [accountId, accounts],
+  );
+
+  const cardLabel = useMemo(
+    () => cards.find((item) => item.id === cardId)?.label,
+    [cardId, cards],
+  );
+
+  const customPeriodActive = Boolean(customFrom && customTo);
+
+  const activeFilterCount =
+    categoryIds.length +
+    (accountId ? 1 : 0) +
+    (cardId ? 1 : 0) +
+    (customPeriodActive ? 1 : 0);
+
+  const selectedCategoryTags = useMemo(
+    () =>
+      categoryIds.map((id) => ({
+        id,
+        label:
+          categoryFilterOptions.find((option) => option.value === id)?.label ??
+          id,
+      })),
+    [categoryFilterOptions, categoryIds],
+  );
 
   const deactivateTarget = items.find((item) => item.id === deactivateId);
 
@@ -332,7 +456,7 @@ export function TransactionsPage() {
               <button
                 type="button"
                 className="btn btn--ghost btn--compact"
-                onClick={() => setMonth((current) => shiftMonth(current, -1))}
+                onClick={() => changeMonth(shiftMonth(month, -1))}
                 aria-label="Mês anterior"
               >
                 ‹
@@ -341,13 +465,13 @@ export function TransactionsPage() {
                 type="month"
                 className="month-nav__input"
                 value={month}
-                onChange={(event) => setMonth(event.target.value)}
+                onChange={(event) => changeMonth(event.target.value)}
                 aria-label="Selecionar mês"
               />
               <button
                 type="button"
                 className="btn btn--ghost btn--compact"
-                onClick={() => setMonth((current) => shiftMonth(current, 1))}
+                onClick={() => changeMonth(shiftMonth(month, 1))}
                 aria-label="Próximo mês"
               >
                 ›
@@ -358,57 +482,115 @@ export function TransactionsPage() {
         }
       />
 
-      <form className="form-panel filters-panel" onSubmit={onApplyFilters}>
-        <div className="form-stack filters-panel__grid">
-          <label>
-            Categoria
-            <SearchableSelect
-              aria-label="Filtro de categoria"
-              options={categoryFilterOptions}
-              value={categoryId}
-              onChange={setCategoryId}
-              allowEmpty
-              emptyLabel="Todas"
-            />
-          </label>
-          <label>
-            Conta
-            <SearchableSelect
-              aria-label="Filtro de conta"
-              options={accountFilterOptions}
-              value={accountId}
-              onChange={setAccountId}
-              allowEmpty
-              emptyLabel="Todas"
-            />
-          </label>
-          <label>
-            Data de
+      <div className="tx-toolbar">
+        <div className="tx-toolbar__row">
+          <label className="tx-search">
+            <span className="visually-hidden">Busca na descrição</span>
             <input
-              type="date"
-              value={customFrom}
-              onChange={(event) => setCustomFrom(event.target.value)}
+              type="search"
+              aria-label="Busca na descrição"
+              placeholder="Buscar na descrição…"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
             />
           </label>
-          <label>
-            Data até
-            <input
-              type="date"
-              value={customTo}
-              onChange={(event) => setCustomTo(event.target.value)}
-            />
-          </label>
-        </div>
-        <div className="form-actions">
           <button
             type="button"
-            className="btn btn--ghost"
-            onClick={clearExtraFilters}
+            className="btn btn--secondary tx-toolbar__filters-btn"
+            onClick={openFilters}
           >
-            Limpar filtros
+            Filtros
+            {activeFilterCount > 0 ? (
+              <span className="tx-toolbar__badge">{activeFilterCount}</span>
+            ) : null}
           </button>
         </div>
-      </form>
+        {activeFilterCount > 0 ? (
+          <div className="tx-toolbar__chips">
+            <ul className="filter-tags" aria-label="Filtros ativos">
+              {selectedCategoryTags.map((tag) => (
+                <li key={`cat-${tag.id}`}>
+                  <button
+                    type="button"
+                    className="filter-tag"
+                    onClick={() => removeCategoryFilter(tag.id)}
+                    aria-label={`Remover filtro ${tag.label}`}
+                  >
+                    <span className="filter-tag__label" title={tag.label}>
+                      {tag.label}
+                    </span>
+                    <span className="filter-tag__remove" aria-hidden>
+                      ×
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {accountId && accountLabel ? (
+                <li>
+                  <button
+                    type="button"
+                    className="filter-tag"
+                    onClick={() => setAccountId('')}
+                    aria-label={`Remover filtro conta ${accountLabel}`}
+                  >
+                    <span className="filter-tag__label" title={accountLabel}>
+                      Conta: {accountLabel}
+                    </span>
+                    <span className="filter-tag__remove" aria-hidden>
+                      ×
+                    </span>
+                  </button>
+                </li>
+              ) : null}
+              {cardId && cardLabel ? (
+                <li>
+                  <button
+                    type="button"
+                    className="filter-tag"
+                    onClick={() => setCardId('')}
+                    aria-label={`Remover filtro cartão ${cardLabel}`}
+                  >
+                    <span className="filter-tag__label" title={cardLabel}>
+                      Cartão: {cardLabel}
+                    </span>
+                    <span className="filter-tag__remove" aria-hidden>
+                      ×
+                    </span>
+                  </button>
+                </li>
+              ) : null}
+              {customPeriodActive ? (
+                <li>
+                  <button
+                    type="button"
+                    className="filter-tag"
+                    onClick={() => {
+                      setCustomFrom('');
+                      setCustomTo('');
+                    }}
+                    aria-label="Remover período personalizado"
+                  >
+                    <span className="filter-tag__label">
+                      {formatShortDate(customFrom)} –{' '}
+                      {formatShortDate(customTo)}
+                    </span>
+                    <span className="filter-tag__remove" aria-hidden>
+                      ×
+                    </span>
+                  </button>
+                </li>
+              ) : null}
+            </ul>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={clearAdvancedFilters}
+            >
+              Limpar filtros
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {error ? (
         <p className="alert" role="alert">
@@ -480,6 +662,143 @@ export function TransactionsPage() {
             ))}
         </ul>
       )}
+
+      <FormModal
+        open={filtersOpen}
+        title="Filtros"
+        description="Refine por categoria, origem ou período personalizado. Conta e cartão são mutuamente exclusivos. O mês do cabeçalho continua valendo quando as datas custom estiverem vazias."
+        wide
+        onClose={() => setFiltersOpen(false)}
+      >
+        <form className="form-stack" onSubmit={applyFilters}>
+          <label>
+            Categoria
+            <SearchableMultiSelect
+              aria-label="Filtro de categoria"
+              options={categoryFilterOptions}
+              value={draft.categoryIds}
+              onChange={(next) =>
+                setDraft((current) => ({ ...current, categoryIds: next }))
+              }
+              emptyLabel="Todas"
+            />
+          </label>
+          {draft.categoryIds.length > 0 ? (
+            <ul className="filter-tags" aria-label="Categorias no rascunho">
+              {draft.categoryIds.map((id) => {
+                const label =
+                  categoryFilterOptions.find((option) => option.value === id)
+                    ?.label ?? id;
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      className="filter-tag"
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          categoryIds: current.categoryIds.filter(
+                            (item) => item !== id,
+                          ),
+                        }))
+                      }
+                      aria-label={`Remover ${label}`}
+                    >
+                      <span className="filter-tag__label" title={label}>
+                        {label}
+                      </span>
+                      <span className="filter-tag__remove" aria-hidden>
+                        ×
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          <div className="filters-modal__grid">
+            <label>
+              Conta
+              <SearchableSelect
+                aria-label="Filtro de conta"
+                options={accountFilterOptions}
+                value={draft.accountId}
+                onChange={(next) =>
+                  setDraft((current) => ({
+                    ...current,
+                    accountId: next,
+                    cardId: next ? '' : current.cardId,
+                  }))
+                }
+                allowEmpty
+                emptyLabel="Todas"
+              />
+            </label>
+            <label>
+              Cartão
+              <SearchableSelect
+                aria-label="Filtro de cartão"
+                options={cardFilterOptions}
+                value={draft.cardId}
+                onChange={(next) =>
+                  setDraft((current) => ({
+                    ...current,
+                    cardId: next,
+                    accountId: next ? '' : current.accountId,
+                  }))
+                }
+                allowEmpty
+                emptyLabel="Todos"
+              />
+            </label>
+            <label>
+              Data de
+              <input
+                type="date"
+                value={draft.customFrom}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    customFrom: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label>
+              Data até
+              <input
+                type="date"
+                value={draft.customTo}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    customTo: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={clearDraft}
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              onClick={() => setFiltersOpen(false)}
+            >
+              Cancelar
+            </button>
+            <button type="submit" className="btn btn--primary">
+              Aplicar
+            </button>
+          </div>
+        </form>
+      </FormModal>
 
       <MapExistingCategoryModal
         open={categoryEdit !== null}
