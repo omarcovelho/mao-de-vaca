@@ -10,6 +10,7 @@ import { OnboardingContinue } from './onboarding-continue';
 import { OnboardingFinalizeButton } from './onboarding-finalize-button';
 import { OnboardingOriginsList } from './onboarding-origins-list';
 import { OnboardingSetupHeader } from './onboarding-setup-header';
+import { OriginAddCard, OriginCard, OriginCards } from './origin-card';
 import { useSetupStatus } from './setup-status-context';
 import type { Origin } from './types';
 import * as invoicesApi from '../invoices/api';
@@ -76,9 +77,10 @@ export function CardsPage() {
   const { reload, isOnboardingComplete, startOnboarding } = useSetupStatus();
   const isOnboarding = !isOnboardingComplete;
   const [searchParams, setSearchParams] = useSearchParams();
+  const cardIdParam = searchParams.get('cardId');
   const invoiceIdParam = searchParams.get('invoiceId');
   const [items, setItems] = useState<Origin[]>([]);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [detailCardId, setDetailCardId] = useState<string | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [label, setLabel] = useState('');
@@ -96,8 +98,12 @@ export function CardsPage() {
   const [deactivateId, setDeactivateId] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState(false);
 
+  const selectedCardId = cardIdParam;
+  const selectedCard =
+    items.find((item) => item.id === selectedCardId) ?? null;
+
   const handleInvoiceLoaded = useCallback((detail: InvoiceDetail) => {
-    setSelectedCardId(detail.cardId);
+    setDetailCardId(detail.cardId);
     setInvoices((current) =>
       current.map((invoice) =>
         invoice.id === detail.id
@@ -111,11 +117,24 @@ export function CardsPage() {
     );
   }, []);
 
-  function openInvoiceDetail(invoiceId: string) {
-    setSearchParams({ invoiceId });
+  function openCardInvoices(cardId: string) {
+    setSearchParams({ cardId });
+  }
+
+  function openInvoiceDetail(invoiceId: string, cardId: string) {
+    setSearchParams({ cardId, invoiceId });
   }
 
   function closeInvoiceDetail() {
+    const cardId = cardIdParam ?? detailCardId;
+    if (cardId) {
+      setSearchParams({ cardId });
+      return;
+    }
+    setSearchParams({});
+  }
+
+  function closeCardInvoices() {
     setSearchParams({});
   }
 
@@ -125,12 +144,6 @@ export function CardsPage() {
     try {
       const cards = await accountsApi.listCards();
       setItems(cards);
-      setSelectedCardId((current) => {
-        if (current && cards.some((card) => card.id === current)) {
-          return current;
-        }
-        return cards[0]?.id ?? null;
-      });
     } catch {
       setError('Não foi possível carregar os cartões.');
     } finally {
@@ -170,8 +183,12 @@ export function CardsPage() {
       setInvoices([]);
       return;
     }
+    if (!items.some((card) => card.id === selectedCardId) && items.length > 0) {
+      setSearchParams({});
+      return;
+    }
     void loadInvoices(selectedCardId);
-  }, [selectedCardId, isOnboarding]);
+  }, [selectedCardId, isOnboarding, items, setSearchParams]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -184,7 +201,6 @@ export function CardsPage() {
     try {
       const created = await accountsApi.createCard({ label, bankId });
       setLabel('');
-      setSelectedCardId(created.id);
       await load();
       await reload();
       refreshOriginsList();
@@ -193,6 +209,7 @@ export function CardsPage() {
         setShowForm(false);
       } else {
         setShowForm(false);
+        setSearchParams({ cardId: created.id });
       }
     } catch {
       setError('Não foi possível criar o cartão.');
@@ -235,6 +252,9 @@ export function CardsPage() {
     try {
       await accountsApi.deactivateCard(deactivateId);
       setDeactivateId(null);
+      if (selectedCardId === deactivateId) {
+        setSearchParams({});
+      }
       await load();
       toast.success('Cartão desativado.');
     } catch {
@@ -251,9 +271,6 @@ export function CardsPage() {
     setShowForm(true);
     setError(null);
   }
-
-  const selectedCard =
-    items.find((item) => item.id === selectedCardId) ?? items[0] ?? null;
 
   const openInvoice =
     invoices.find((invoice) => invoice.status === 'open') ??
@@ -345,26 +362,238 @@ export function CardsPage() {
     );
   }
 
+  if (selectedCardId) {
+    return (
+      <section className="page">
+        <button
+          type="button"
+          className="btn btn--ghost invoice-detail__back"
+          onClick={closeCardInvoices}
+        >
+          ← Voltar aos cartões
+        </button>
+
+        <PageHeader
+          title={selectedCard?.label ?? 'Cartão'}
+          subtitle={
+            selectedCard
+              ? `Faturas · ${selectedCard.bank.name}`
+              : 'Faturas do cartão'
+          }
+          trailing={
+            <div className="section__actions">
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setShowInvoiceForm(true)}
+              >
+                Nova fatura
+              </button>
+              {selectedCard ? (
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm"
+                  onClick={() => setDeactivateId(selectedCard.id)}
+                >
+                  Desativar cartão
+                </button>
+              ) : null}
+            </div>
+          }
+        />
+
+        {error && !showInvoiceForm ? (
+          <p className="alert" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <p className="page__empty">Carregando…</p>
+        ) : !selectedCard ? (
+          <p className="page__empty">Cartão não encontrado.</p>
+        ) : (
+          <>
+            <div className="hero-metric">
+              <p className="panel__eyebrow">Saldo em aberto</p>
+              <p
+                className={`hero-metric__value${
+                  openInvoice && openInvoice.balance > 0
+                    ? ' hero-metric__value--expense'
+                    : ''
+                }`}
+              >
+                {openInvoice ? formatMoney(openInvoice.balance) : '—'}
+              </p>
+              <p className="hero-metric__label">
+                {openInvoice
+                  ? `Fatura ${formatMonth(openInvoice.referenceMonth)} · vence ${formatDueDate(openInvoice.dueDate)}`
+                  : selectedCard.label}
+              </p>
+              {openInvoice ? (
+                <div className="hero-metric__meta">
+                  <span className={statusPillClass(openInvoice.status)}>
+                    {statusLabel(openInvoice.status)}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn--secondary btn--sm"
+                    onClick={() =>
+                      openInvoiceDetail(openInvoice.id, selectedCard.id)
+                    }
+                  >
+                    Ver fatura
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <section className="section" aria-labelledby="invoices-heading">
+              <div className="section__header">
+                <h2 id="invoices-heading" className="section__title">
+                  Faturas
+                </h2>
+              </div>
+
+              {invoicesLoading ? (
+                <p className="page__empty">Carregando faturas…</p>
+              ) : invoices.length === 0 ? (
+                <div className="surface-panel">
+                  <p className="page__empty" style={{ margin: 0 }}>
+                    Nenhuma fatura ainda.
+                  </p>
+                  <div className="section__actions" style={{ marginTop: '1rem' }}>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--sm"
+                      onClick={() => setShowInvoiceForm(true)}
+                    >
+                      Nova fatura
+                    </button>
+                    <Link to="/importar" className="btn btn--secondary btn--sm">
+                      Importar CSV
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <ul className="invoice-cards">
+                  {invoices.map((invoice) => (
+                    <li key={invoice.id}>
+                      <button
+                        type="button"
+                        className="invoice-card"
+                        onClick={() =>
+                          openInvoiceDetail(invoice.id, selectedCard.id)
+                        }
+                      >
+                        <div className="invoice-card__title-row">
+                          <span className="invoice-card__title">
+                            {formatMonth(invoice.referenceMonth)}
+                          </span>
+                          <span className={statusPillClass(invoice.status)}>
+                            {statusLabel(invoice.status)}
+                          </span>
+                        </div>
+                        <span className="invoice-card__meta">
+                          Vence {formatDueDate(invoice.dueDate)}
+                        </span>
+                        <span
+                          className={`invoice-card__value${
+                            invoice.balance > 0
+                              ? ' invoice-card__value--expense'
+                              : ''
+                          }`}
+                        >
+                          {formatMoney(invoice.balance)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </>
+        )}
+
+        <FormModal
+          open={showInvoiceForm}
+          title="Nova fatura"
+          description="Cria a fatura para o cartão selecionado."
+          busy={invoiceSubmitting}
+          onClose={closeInvoiceModal}
+        >
+          <form onSubmit={handleCreateInvoice} className="form-stack">
+            <label>
+              Mês de referência
+              <input
+                type="month"
+                name="referenceMonth"
+                value={referenceMonth}
+                onChange={(event) => setReferenceMonth(event.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Vencimento
+              <input
+                type="date"
+                name="dueDate"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                required
+              />
+            </label>
+            {error ? <p role="alert">{error}</p> : null}
+            <div className="form-actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={invoiceSubmitting}
+                onClick={closeInvoiceModal}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={invoiceSubmitting}
+              >
+                {invoiceSubmitting ? 'Salvando…' : 'Criar fatura'}
+              </button>
+            </div>
+          </form>
+        </FormModal>
+
+        <ConfirmModal
+          open={deactivateId !== null}
+          title="Desativar cartão"
+          description={
+            deactivateId
+              ? `Desativar “${items.find((item) => item.id === deactivateId)?.label ?? 'este cartão'}”? Ele deixa de aparecer nas origens ativas.`
+              : null
+          }
+          confirmLabel="Desativar"
+          variant="danger"
+          busy={deactivating}
+          onCancel={() => {
+            if (!deactivating) {
+              setDeactivateId(null);
+            }
+          }}
+          onConfirm={() => void runDeactivate()}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="page">
       <PageHeader
         title="Cartões"
-        subtitle="Faturas e saldo em aberto por cartão"
-        trailing={
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => {
-              setError(null);
-              setShowForm(true);
-            }}
-          >
-            Adicionar cartão
-          </button>
-        }
+        subtitle="Selecione um cartão para ver as faturas"
       />
 
-      {error && !showForm && !showInvoiceForm ? (
+      {error && !showForm ? (
         <p className="alert" role="alert">
           {error}
         </p>
@@ -372,146 +601,25 @@ export function CardsPage() {
 
       {loading ? (
         <p className="page__empty">Carregando…</p>
-      ) : items.length === 0 ? (
-        <p className="page__empty">Nenhum cartão cadastrado ainda.</p>
       ) : (
-        <>
-          <div className="pill-group" style={{ marginBottom: '1.5rem' }}>
-            {items.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`pill${selectedCard?.id === item.id ? ' pill--active' : ''}`}
-                onClick={() => {
-                  setSelectedCardId(item.id);
-                }}
-                aria-pressed={selectedCard?.id === item.id}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          {selectedCard ? (
-            <>
-              <div className="hero-metric">
-                <p className="panel__eyebrow">Saldo em aberto</p>
-                <p
-                  className={`hero-metric__value${
-                    openInvoice && openInvoice.balance > 0
-                      ? ' hero-metric__value--expense'
-                      : ''
-                  }`}
-                >
-                  {openInvoice ? formatMoney(openInvoice.balance) : '—'}
-                </p>
-                <p className="hero-metric__label">
-                  {openInvoice
-                    ? `Fatura ${formatMonth(openInvoice.referenceMonth)} · vence ${formatDueDate(openInvoice.dueDate)}`
-                    : selectedCard.label}
-                </p>
-                {openInvoice ? (
-                  <div className="hero-metric__meta">
-                    <span className={statusPillClass(openInvoice.status)}>
-                      {statusLabel(openInvoice.status)}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm"
-                      onClick={() => openInvoiceDetail(openInvoice.id)}
-                    >
-                      Ver fatura
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-
-              <section className="section" aria-labelledby="invoices-heading">
-                <div className="section__header">
-                  <h2 id="invoices-heading" className="section__title">
-                    Faturas · {selectedCard.label}
-                  </h2>
-                  <div className="section__actions">
-                    <button
-                      type="button"
-                      className="btn btn--secondary btn--sm"
-                      onClick={() => setShowInvoiceForm(true)}
-                    >
-                      Nova fatura
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--danger btn--sm"
-                      onClick={() => setDeactivateId(selectedCard.id)}
-                    >
-                      Desativar cartão
-                    </button>
-                  </div>
-                </div>
-
-                {invoicesLoading ? (
-                  <p className="page__empty">Carregando faturas…</p>
-                ) : invoices.length === 0 ? (
-                  <div className="surface-panel">
-                    <p className="page__empty" style={{ margin: 0 }}>
-                      Nenhuma fatura ainda.
-                    </p>
-                    <div className="section__actions" style={{ marginTop: '1rem' }}>
-                      <button
-                        type="button"
-                        className="btn btn--primary btn--sm"
-                        onClick={() => setShowInvoiceForm(true)}
-                      >
-                        Nova fatura
-                      </button>
-                      <Link to="/importar" className="btn btn--secondary btn--sm">
-                        Importar CSV
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="surface-panel">
-                    <ul className="list-rows">
-                      {invoices.map((invoice) => (
-                        <li key={invoice.id} className="list-row">
-                          <div className="list-row__main">
-                            <div className="list-row__title-row">
-                              <span className="list-row__title">
-                                {formatMonth(invoice.referenceMonth)}
-                              </span>
-                              <span className={statusPillClass(invoice.status)}>
-                                {statusLabel(invoice.status)}
-                              </span>
-                            </div>
-                            <span className="list-row__meta">
-                              Vence {formatDueDate(invoice.dueDate)}
-                            </span>
-                          </div>
-                          <div className="list-row__actions">
-                            <span
-                              className={`list-row__value${
-                                invoice.balance > 0 ? ' list-row__value--expense' : ''
-                              }`}
-                            >
-                              {formatMoney(invoice.balance)}
-                            </span>
-                            <button
-                              type="button"
-                              className="btn btn--secondary btn--sm"
-                              onClick={() => openInvoiceDetail(invoice.id)}
-                            >
-                              Ver
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </section>
-            </>
-          ) : null}
-        </>
+        <OriginCards>
+          {items.map((item) => (
+            <OriginCard
+              key={item.id}
+              item={item}
+              kind="card"
+              onSelect={openCardInvoices}
+              onDeactivate={setDeactivateId}
+            />
+          ))}
+          <OriginAddCard
+            label="Novo cartão"
+            onClick={() => {
+              setError(null);
+              setShowForm(true);
+            }}
+          />
+        </OriginCards>
       )}
 
       <FormModal
@@ -552,55 +660,6 @@ export function CardsPage() {
               disabled={submitting || !bankId}
             >
               {submitting ? 'Salvando…' : 'Adicionar cartão'}
-            </button>
-          </div>
-        </form>
-      </FormModal>
-
-      <FormModal
-        open={showInvoiceForm}
-        title="Nova fatura"
-        description="Cria a fatura para o cartão selecionado."
-        busy={invoiceSubmitting}
-        onClose={closeInvoiceModal}
-      >
-        <form onSubmit={handleCreateInvoice} className="form-stack">
-          <label>
-            Mês de referência
-            <input
-              type="month"
-              name="referenceMonth"
-              value={referenceMonth}
-              onChange={(event) => setReferenceMonth(event.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Vencimento
-            <input
-              type="date"
-              name="dueDate"
-              value={dueDate}
-              onChange={(event) => setDueDate(event.target.value)}
-              required
-            />
-          </label>
-          {error ? <p role="alert">{error}</p> : null}
-          <div className="form-actions">
-            <button
-              type="button"
-              className="btn btn--ghost"
-              disabled={invoiceSubmitting}
-              onClick={closeInvoiceModal}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={invoiceSubmitting}
-            >
-              {invoiceSubmitting ? 'Salvando…' : 'Criar fatura'}
             </button>
           </div>
         </form>
