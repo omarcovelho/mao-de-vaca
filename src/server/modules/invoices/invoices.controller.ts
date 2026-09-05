@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -65,5 +66,19 @@ export class InvoiceDetailController {
     @Body() body: LinkInvoicePaymentsDto,
   ) {
     return this.invoicesService.linkPayments(user.userId, id, body);
+  }
+
+  @Delete(':id/payments/:transactionId')
+  @HttpCode(200)
+  unlinkPayment(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('transactionId') transactionId: string,
+  ) {
+    return this.invoicesService.unlinkPayment(
+      user.userId,
+      id,
+      transactionId,
+    );
   }
 }

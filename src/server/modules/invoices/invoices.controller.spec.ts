@@ -432,8 +432,8 @@ describe('Invoices HTTP', () => {
       include: { category: true },
     });
     expect(updatedPayment.type).toBe(TransactionType.INVOICE_PAYMENT);
-    expect(updatedPayment.category.systemKey).toBe('INVOICE_PAYMENT');
-    expect(updatedPayment.category.name).toBe('Pagamento de fatura');
+    expect(updatedPayment.category?.systemKey).toBe('INVOICE_PAYMENT');
+    expect(updatedPayment.category?.name).toBe('Pagamento de fatura');
 
     const purchases = await prisma.transaction.findMany({
       where: { id: { in: purchaseIds } },
@@ -588,5 +588,167 @@ describe('Invoices HTTP', () => {
       .set('Cookie', authCookie)
       .send({ dueDate: '2026-09-25' })
       .expect(404);
+  });
+
+  it('POST /api/invoices/:id/payments stores previousCategoryId', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-100]);
+    const payment = await seedAccountDebit({
+      amount: -100,
+      date: '2026-09-10',
+      dedupKey: 'pay-prev-cat',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(200);
+
+    const link = await prisma.invoicePaymentLink.findUniqueOrThrow({
+      where: { transactionId: payment.id },
+    });
+    expect(link.previousCategoryId).toBe(categoryId);
+  });
+
+  it('DELETE /api/invoices/:id/payments/:transactionId unlinks and clears cashDate', async () => {
+    const { invoice, purchaseIds } = await seedInvoiceWithPurchases([-300, -200]);
+    const payment = await seedAccountDebit({
+      amount: -500,
+      date: '2026-09-10',
+      dedupKey: 'pay-unlink-full',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/invoices/${invoice.id}/payments/${payment.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      id: invoice.id,
+      balance: -500,
+      status: 'open',
+    });
+    expect(res.body.payments).toEqual([]);
+
+    const updatedPayment = await prisma.transaction.findUniqueOrThrow({
+      where: { id: payment.id },
+    });
+    expect(updatedPayment.type).toBe(TransactionType.EXPENSE);
+    expect(updatedPayment.categoryId).toBe(categoryId);
+
+    const link = await prisma.invoicePaymentLink.findUnique({
+      where: { transactionId: payment.id },
+    });
+    expect(link).toBeNull();
+
+    const purchases = await prisma.transaction.findMany({
+      where: { id: { in: purchaseIds } },
+    });
+    for (const purchase of purchases) {
+      expect(purchase.cashDate).toBeNull();
+    }
+  });
+
+  it('DELETE /api/invoices/:id/payments/:transactionId keeps remaining payment cashDate', async () => {
+    const { invoice, purchaseIds } = await seedInvoiceWithPurchases([-500]);
+    const first = await seedAccountDebit({
+      amount: -200,
+      date: '2026-09-05',
+      dedupKey: 'pay-unlink-1',
+    });
+    const second = await seedAccountDebit({
+      amount: -300,
+      date: '2026-09-20',
+      dedupKey: 'pay-unlink-2',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [first.id, second.id] })
+      .expect(200);
+
+    const res = await request(app.getHttpServer())
+      .delete(`/api/invoices/${invoice.id}/payments/${second.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(res.body).toMatchObject({
+      balance: -300,
+      status: 'partial',
+    });
+    expect(res.body.payments).toHaveLength(1);
+    expect(res.body.payments[0].id).toBe(first.id);
+
+    const purchases = await prisma.transaction.findMany({
+      where: { id: { in: purchaseIds } },
+    });
+    for (const purchase of purchases) {
+      expect(purchase.cashDate?.toISOString().slice(0, 10)).toBe('2026-09-05');
+    }
+  });
+
+  it('DELETE restores categoryId null when previous category is inactive', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-100]);
+    const payment = await seedAccountDebit({
+      amount: -100,
+      date: '2026-09-10',
+      dedupKey: 'pay-unlink-inactive',
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/invoices/${invoice.id}/payments`)
+      .set('Cookie', authCookie)
+      .send({ transactionIds: [payment.id] })
+      .expect(200);
+
+    await prisma.category.update({
+      where: { id: categoryId },
+      data: { active: false },
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/api/invoices/${invoice.id}/payments/${payment.id}`)
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    const updatedPayment = await prisma.transaction.findUniqueOrThrow({
+      where: { id: payment.id },
+    });
+    expect(updatedPayment.type).toBe(TransactionType.EXPENSE);
+    expect(updatedPayment.categoryId).toBeNull();
+  });
+
+  it('DELETE returns 404 for unknown invoice', async () => {
+    const payment = await seedAccountDebit({
+      amount: -50,
+      date: '2026-09-10',
+      dedupKey: 'pay-unlink-404',
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/api/invoices/does-not-exist/payments/${payment.id}`)
+      .set('Cookie', authCookie)
+      .expect(404);
+  });
+
+  it('DELETE returns 400 when payment is not linked to invoice', async () => {
+    const { invoice } = await seedInvoiceWithPurchases([-50]);
+    const payment = await seedAccountDebit({
+      amount: -50,
+      date: '2026-09-10',
+      dedupKey: 'pay-unlink-not-linked',
+    });
+
+    await request(app.getHttpServer())
+      .delete(`/api/invoices/${invoice.id}/payments/${payment.id}`)
+      .set('Cookie', authCookie)
+      .expect(400);
   });
 });

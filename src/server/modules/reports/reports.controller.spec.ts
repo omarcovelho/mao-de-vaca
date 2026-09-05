@@ -53,7 +53,7 @@ describe('Reports HTTP', () => {
     description: string;
     amount: string;
     type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVOICE_PAYMENT';
-    categoryId: string;
+    categoryId?: string | null;
     competenceDate: string;
     cashDate?: string;
     active?: boolean;
@@ -65,7 +65,7 @@ describe('Reports HTTP', () => {
         description: input.description,
         amount: new Prisma.Decimal(input.amount),
         type: input.type,
-        categoryId: input.categoryId,
+        categoryId: input.categoryId ?? null,
         accountId,
         competenceDate: new Date(input.competenceDate),
         cashDate: new Date(input.cashDate ?? input.competenceDate),
@@ -492,6 +492,57 @@ describe('Reports HTTP', () => {
       percent: expect.closeTo(33.33, 1),
       children: [],
     });
+  });
+
+  it('GET /api/reports/by-category includes Sem categoria for null categoryId', async () => {
+    await Promise.all([
+      seedTransaction({
+        description: 'Com categoria',
+        amount: '-100.00',
+        type: 'EXPENSE',
+        categoryId: foodId,
+        competenceDate: '2026-09-10',
+        dedupKey: 'uncat-food',
+      }),
+      seedTransaction({
+        description: 'Sem categoria',
+        amount: '-50.00',
+        type: 'EXPENSE',
+        categoryId: null,
+        competenceDate: '2026-09-12',
+        dedupKey: 'uncat-null',
+      }),
+    ]);
+
+    const summary = await request(app.getHttpServer())
+      .get('/api/reports/summary')
+      .query({ regime: 'competence', from: '2026-09-01', to: '2026-09-30' })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(summary.body.expenseTotal).toBe(150);
+
+    const byCategory = await request(app.getHttpServer())
+      .get('/api/reports/by-category')
+      .query({ regime: 'competence', from: '2026-09-01', to: '2026-09-30' })
+      .set('Cookie', authCookie)
+      .expect(200);
+
+    expect(byCategory.body.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          categoryId: foodId,
+          name: 'Alimentação',
+          total: 100,
+        }),
+        expect.objectContaining({
+          categoryId: null,
+          name: 'Sem categoria',
+          total: 50,
+          children: [],
+        }),
+      ]),
+    );
   });
 
   it('GET /api/reports/monthly-evolution returns months window oldest to newest', async () => {

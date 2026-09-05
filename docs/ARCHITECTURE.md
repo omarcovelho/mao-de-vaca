@@ -186,9 +186,9 @@ flowchart LR
 | **Card** (`Cartão`) | PostgreSQL | `id`, `userId`, `bankId`, `label`, `active` |
 | **Category** (`Categoria`) | PostgreSQL | Árvore: `id`, `userId`, `parentId?`, `name`, `kind` (`EXPENSE` \| `INCOME` \| `NON_EXPENSE`), `systemKey?` (categorias de sistema), `color` (`#RRGGBB`), `icon` (catálogo), `active`; profundidade máx. 5; lançamentos futuros referenciam apenas **folhas**. Folhas NON_EXPENSE de sistema (`INVOICE_PAYMENT`, `ACCOUNT_TRANSFER`, `INVESTMENT`) são provisionadas para todo usuário e não podem ser desativadas. |
 | **TransferLink** | PostgreSQL | Vínculo 1:1 entre débito e crédito de transferência entre contas (`debitTransactionId`, `creditTransactionId`); ambas ficam `type: TRANSFER` com categoria `ACCOUNT_TRANSFER` |
-| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?` (null em compras de cartão até V6), `type`, `amount`, `categoryId`, `accountId` **ou** `cardId`+`invoiceId`, `importBatchId`, `dedupKey`, `active` (soft-disable; listagem padrão só ativos). |
+| **Transaction** | PostgreSQL | Lançamento: `competenceDate`, `cashDate?` (null em compras de cartão até pagamento), `type`, `amount`, `categoryId?` (opcional — ausência = sem categoria), `accountId` **ou** `cardId`+`invoiceId`, `importBatchId`, `dedupKey`, `active` (soft-disable; listagem padrão só ativos). |
 | **Invoice** | PostgreSQL | Fatura: FK `cardId`, `referenceMonth`, `dueDate`; saldo e status **derivados** (`balance = sum(amount)`) |
-| **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; suporta pagamento parcial e cross-bank |
+| **InvoicePaymentLink** | PostgreSQL | Vínculo M:N pagamento↔fatura; `previousCategoryId?` (folha antes do vínculo; `onDelete: SetNull`); suporta pagamento parcial e cross-bank |
 | **ParentPurchase** | PostgreSQL | Agregado informacional; não entra em somas; parcelas vinculadas manualmente |
 | **ImportBatch** | PostgreSQL | `importMode` (`transactions` \| `invoice`), `accountId` ou `cardId`, `invoiceId?`, `parserId`, resultado; cada lançamento criado no lote aponta para este `id` |
 
@@ -199,16 +199,16 @@ flowchart LR
 | **Saldo de fatura** | `balance = sum(amount)` das txs ativas da fatura − `sum(amount)` dos pagamentos vinculados. Status: `open` / `partial` / `paid` (V6) |
 | **Status de fatura** | Derivado do saldo: em aberto (`balance < 0`) / quitada (`balance === 0`); parcial após V6 |
 | **Totais de gasto/receita** | `saldo = receitas − despesas`; `TRANSFER` e `INVOICE_PAYMENT` não entram (RN-01, RN-02) |
-| **Pagamento de fatura** | Sempre tipo `INVOICE_PAYMENT` após vínculo; nunca despesa nas somas — evita contagem duplicada (RN-02). Não importar do CSV da fatura — vínculo manual na Conta (V6). `TRANSFER` reservado para Conta↔Conta (futuro). |
+| **Pagamento de fatura** | Sempre tipo `INVOICE_PAYMENT` após vínculo; nunca despesa nas somas (RN-02). Desvínculo restaura tipo pelo sinal e `previousCategoryId` (ou `categoryId` null). Não importar do CSV da fatura — vínculo manual na Conta. |
 | **Compra-pai** | Nunca contabilizada; apenas parcelas entram nas somas (RN-03) |
 | **Estorno** | Na fatura: `EXPENSE` com valor positivo no CSV; nunca receita (RN-04) |
 | **Investimento** | Transferência: afeta caixa, não afeta gasto nem receita (RN-05) |
-| **Caixa de cartão** | Reconhecido pela data do pagamento real da fatura, não pelo vencimento (RN-06); até lá `cashDate` null |
+| **Caixa de cartão** | Reconhecido pela data do pagamento real da fatura, não pelo vencimento (RN-06); até lá `cashDate` null; sem pagamentos vinculados → `cashDate` null nas compras |
 | **Completude do caixa** | Gastos de cartão só aparecem em caixa quando pagamentos estão registrados e vinculados (RN-07) |
 | **Pré-requisito de importação** | Conta ou cartão cadastrado obrigatório; rejeição sem origem válida (RN-08) |
 | **Origens desativadas** | Não aparecem em nova importação; histórico preservado (RN-09) |
 | **Fatura e cartão** | Fatura sempre vinculada a cartão cadastrado (RN-10) |
-| **Categoria e lançamento** | Todo lançamento referencia `categoryId` de uma **folha** cadastrada (RN-11–13); profundidade máx. 5 |
+| **Categoria e lançamento** | Quando presente, `categoryId` é folha cadastrada; `null` = sem categoria (ainda entra em totais/quebra como “Sem categoria”) |
 
 ### Regimes: competência vs caixa
 
@@ -366,8 +366,9 @@ Fluxo em `ui/modules/invoices/`:
 
 1. Usuário abre fatura com saldo em aberto
 2. Busca débitos na conta que correspondam ao pagamento
-3. Vincula um ou mais pagamentos (`POST /api/invoices/:id/payments`)
-4. Server recalcula saldo e status derivados
+3. Vincula um ou mais pagamentos (`POST /api/invoices/:id/payments`) — grava `previousCategoryId`
+4. Server recalcula saldo/status e `cashDate` das compras
+5. Pode **desvincular** (`DELETE /api/invoices/:id/payments/:transactionId`): restaura tipo pelo sinal e categoria anterior (ou `null`); sem pagamentos restantes, `cashDate` das compras volta a `null`
 
 Relação **muitos-para-um**: suporta pagamento parcial e pagamento originado de banco distinto do cartão. Sem casamento automático.
 
@@ -432,7 +433,7 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Lançamentos
 
-- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId`, `accountId`, `includeInactive`; item inclui `transferCounterpartId` e `category.systemKey`
+- `GET /api/transactions` — filtros: `regime`, `from`, `to` (obrigatórios), opcionais `categoryId`, `accountId`, `includeInactive`; item inclui `category` nullable, `transferCounterpartId` e `category.systemKey`
 - `GET /api/transactions/transfer-candidates` — candidatos a vínculo (`transactionId`, `amount?`)
 - `PATCH /api/transactions/:id` — `categoryId` (folha; NON_EXPENSE aplica comportamento de sistema), `counterpartTransactionId` (obrigatório para `ACCOUNT_TRANSFER`), e/ou `active`
 
@@ -441,7 +442,8 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 - `GET /api/invoices` — lista com saldo/status derivados
 - `GET /api/invoices/:id` — detalhe + compras + pagamentos vinculados
 - `PATCH /api/invoices/:id` — atualizar `dueDate` (YYYY-MM-DD)
-- `POST /api/invoices/:id/payments` — vincular pagamento(s)
+- `POST /api/invoices/:id/payments` — vincular pagamento(s); persiste `previousCategoryId`
+- `DELETE /api/invoices/:id/payments/:transactionId` — desvincular pagamento; restaura débito; recalcula `cashDate`
 
 ### Compra-pai
 
@@ -451,8 +453,8 @@ Todas as rotas sob o prefixo global `/api`. DTOs definidos **apenas** em `server
 
 ### Relatórios
 
-- `GET /api/reports/summary?regime=&from=&to=` — totais gasto/receita/saldo (RF-19)
-- `GET /api/reports/by-category?regime=&from=&to=` — árvore de gastos por categoria (raízes com `children`; totais agregados nos pais) (RF-20)
+- `GET /api/reports/summary?regime=&from=&to=` — totais gasto/receita/saldo (RF-19); inclui despesas sem categoria
+- `GET /api/reports/by-category?regime=&from=&to=` — árvore de gastos por categoria; item sintético `{ categoryId: null, name: "Sem categoria" }` quando há despesas sem folha (RF-20)
 - `GET /api/reports/monthly-evolution?regime=&months=&endMonth=` — evolução mensal (RF-21); `months` default 6, `endMonth` default mês corrente (`YYYY-MM`)
 
 ### Health
@@ -553,3 +555,4 @@ Nenhum desvio intencional de regra de negócio — apenas materialização técn
 | 2026-09-03 | Import: `DELETE /api/imports/:id` hard delete com guards (TRANSFER, fatura paid) |
 | 2026-09-03 | Faturas: `PATCH /api/invoices/:id` para editar `dueDate` |
 | 2026-09-04 | NON_EXPENSE de sistema (`systemKey`) + `TransferLink`; importação não atribui NON_EXPENSE; pagamento de fatura seta categoria automaticamente |
+| 2026-09-05 | V7.5 slice A: `DELETE` pagamento; `categoryId` opcional; bucket “Sem categoria” em by-category |

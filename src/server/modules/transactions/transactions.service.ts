@@ -31,7 +31,7 @@ type TransactionRow = Transaction & {
     icon: string;
     kind: CategoryKind;
     systemKey: string | null;
-  };
+  } | null;
   account: {
     id: string;
     label: string;
@@ -609,14 +609,16 @@ export class TransactionsService {
       displayDate:
         regime === 'competence' ? competenceDate : (cashDate ?? competenceDate),
       active: row.active,
-      category: {
-        id: row.category.id,
-        name: row.category.name,
-        color: row.category.color,
-        icon: row.category.icon,
-        kind: row.category.kind,
-        systemKey: row.category.systemKey,
-      },
+      category: row.category
+        ? {
+            id: row.category.id,
+            name: row.category.name,
+            color: row.category.color,
+            icon: row.category.icon,
+            kind: row.category.kind,
+            systemKey: row.category.systemKey,
+          }
+        : null,
       account: row.account
         ? {
             id: row.account.id,

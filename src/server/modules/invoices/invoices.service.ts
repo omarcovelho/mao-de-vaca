@@ -254,6 +254,7 @@ export class InvoicesService {
             userId,
             invoiceId,
             transactionId: payment.id,
+            previousCategoryId: payment.categoryId,
           },
         });
         await tx.transaction.update({
@@ -270,6 +271,73 @@ export class InvoicesService {
 
     const detail = await this.loadInvoiceDetail(userId, invoiceId);
     return this.toDetailResponse(detail);
+  }
+
+  async unlinkPayment(
+    userId: string,
+    invoiceId: string,
+    transactionId: string,
+  ): Promise<InvoiceDetailResponse> {
+    await this.getOwnedInvoice(userId, invoiceId);
+
+    const link = await this.prisma.invoicePaymentLink.findFirst({
+      where: { userId, invoiceId, transactionId },
+      include: {
+        transaction: true,
+        previousCategory: {
+          include: { _count: { select: { children: true } } },
+        },
+      },
+    });
+
+    if (!link) {
+      throw new BadRequestException(
+        'Lançamento não está vinculado a esta fatura',
+      );
+    }
+
+    const restoredCategoryId = this.resolveRestoredCategoryId(
+      link.previousCategory,
+    );
+    const restoredType =
+      Number(link.transaction.amount) < 0
+        ? TransactionType.EXPENSE
+        : TransactionType.INCOME;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.invoicePaymentLink.delete({ where: { id: link.id } });
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: {
+          type: restoredType,
+          categoryId: restoredCategoryId,
+        },
+      });
+      await this.recomputePurchaseCashDates(tx, userId, invoiceId);
+    });
+
+    const detail = await this.loadInvoiceDetail(userId, invoiceId);
+    return this.toDetailResponse(detail);
+  }
+
+  private resolveRestoredCategoryId(
+    previous:
+      | {
+          id: string;
+          active: boolean;
+          _count: { children: number };
+        }
+      | null
+      | undefined,
+  ): string | null {
+    if (
+      previous &&
+      previous.active &&
+      previous._count.children === 0
+    ) {
+      return previous.id;
+    }
+    return null;
   }
 
   async getOwnedInvoice(
@@ -312,6 +380,15 @@ export class InvoicesService {
       );
 
     if (paymentDates.length === 0) {
+      await tx.transaction.updateMany({
+        where: {
+          userId,
+          invoiceId,
+          active: true,
+          cardId: { not: null },
+        },
+        data: { cashDate: null },
+      });
       return;
     }
 
@@ -382,13 +459,15 @@ export class InvoicesService {
           competenceDate: tx.competenceDate.toISOString().slice(0, 10),
           cashDate: tx.cashDate ? tx.cashDate.toISOString().slice(0, 10) : null,
           active: tx.active,
-          category: {
-            id: tx.category.id,
-            name: tx.category.name,
-            color: tx.category.color,
-            icon: tx.category.icon,
-            kind: tx.category.kind,
-          },
+          category: tx.category
+            ? {
+                id: tx.category.id,
+                name: tx.category.name,
+                color: tx.category.color,
+                icon: tx.category.icon,
+                kind: tx.category.kind,
+              }
+            : null,
         }),
       ),
       payments: activePayments.map((link): InvoicePaymentItem => {

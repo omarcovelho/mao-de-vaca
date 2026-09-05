@@ -438,13 +438,13 @@ export function TransactionsPage() {
                       id: item.id,
                       description: item.description,
                       type: item.type,
-                      categoryId: item.category.id,
+                      categoryId: item.category?.id ?? '',
                       amount: item.amount,
                     })
                   }
                 >
-                  {item.category.name}
-                  {item.category.systemKey === 'ACCOUNT_TRANSFER' &&
+                  {item.category?.name ?? 'Sem categoria'}
+                  {item.category?.systemKey === 'ACCOUNT_TRANSFER' &&
                   !item.transferCounterpartId
                     ? ' · sem vínculo'
                     : ''}

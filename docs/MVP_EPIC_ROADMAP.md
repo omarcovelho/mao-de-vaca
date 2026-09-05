@@ -1,7 +1,7 @@
 # Mão de Vaca — MVP Epic Roadmap (vertical slices)
 
 **Status:** Rascunho para planejamento de implementação  
-**Última atualização:** 2026-09-02  
+**Última atualização:** 2026-09-04  
 **Fonte de verdade do produto:** [PROJECT_DEFINITION.MD](./PROJECT_DEFINITION.MD) (especialmente §3, §5 e §6)  
 **Fonte de verdade da arquitetura:** [ARCHITECTURE.md](./ARCHITECTURE.md)
 
@@ -20,18 +20,20 @@ flowchart LR
   V5[V5_Lancamentos]
   V6[V6_PagamentoFatura]
   V7[V7_Relatorios]
+  V75[V7_5_Usabilidade]
   V8[V8_CompraPai]
   V9[V9_PilotReady]
 
   V0 --> V1 --> V2 --> V25 --> V3 --> V4
   V4 --> V5 --> V6 --> V7
+  V7 --> V75
   V5 --> V8
   V6 --> V9
-  V7 --> V9
+  V75 --> V9
   V8 --> V9
 ```
 
-Após **V2.5**, o módulo de categorias existe antes de qualquer importação. Após **V4**, o usuário consegue importar extrato de conta e fatura de cartão. **V5–V6** completam a leitura dos lançamentos nos dois regimes. **V7** fecha o dashboard. **V8** (compra-pai) pode ser desenvolvido em paralelo após V5. **V9** consolida deploy local e checklist de uso pessoal.
+Após **V2.5**, o módulo de categorias existe antes de qualquer importação. Após **V4**, o usuário consegue importar extrato de conta e fatura de cartão. **V5–V6** completam a leitura dos lançamentos nos dois regimes. **V7** fecha o dashboard. **V7.5** fecha reversibilidade e atrito do uso mensal (desvincular pagamento, reativar, filtros, caixa visível). **V8** (compra-pai) pode ser desenvolvido em paralelo após V5 e está **adiado** — não é pré-requisito do piloto. **V9** consolida deploy local e checklist de uso pessoal.
 
 ---
 
@@ -288,6 +290,39 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 
 ---
 
+## V7.5 — Usabilidade e reversibilidade
+
+**Branch sugerida:** `feature/v7-5-usabilidade`
+
+**Resultado para o usuário:** Desfaz vínculo de pagamento de fatura e transferência entre contas sem corromper a outra perna; reativa o que desativou; cria fatura na própria importação; filtra lançamentos por cartão, texto e categoria pai; vê compras sem caixa e faturas em aberto na home (com seletor de mês).
+
+**Entregas verticais:**
+
+| Camada | Escopo |
+|--------|--------|
+| **Prisma** | Categoria anterior em `InvoicePaymentLink` e `TransferLink` (restaurar ao desvincular) |
+| **`src/server/`** | `DELETE` pagamento; `GET /api/invoices`; filtros `cardId` / `q` / subárvore; `cashDate` null sem pagamentos |
+| **`src/ui/`** | Desvincular na fatura; reativar; nova fatura em `/importar`; filtros; marcador “sem caixa”; home com mês + faturas abertas |
+
+**Demo:** Vincular pagamento errado → desvincular → fatura aberta e compras fora do caixa → filtros e home do mês anterior com faturas em aberto.
+
+**Mapeia para:** RF-02c, RF-12 (simétrico), RF-22; RN-06, RN-07. Spec: [docs/epics/V7_5_USABILIDADE.md](./epics/V7_5_USABILIDADE.md).
+
+**Depende de:** V6–V7. **Antes de V9.** Sem compra-pai.
+
+**Fora:** V8 (adiada); parsers por banco; lançamento manual.
+
+| Fase | Resumo |
+|------|--------|
+| A Pagamento | Desvincular + zerar `cashDate` |
+| B Reativar | Toggle inativos nas quatro telas |
+| C Import | Nova fatura em `/importar` |
+| D Filtros | Cartão, busca, categoria pai |
+| E Caixa | “sem caixa” + faturas abertas na home |
+| F Transferência | Unlink sem copiar categoria |
+
+---
+
 ## V8 — Compra-pai slice: agrupamento informacional de parcelas
 
 **Branch sugerida:** `feature/v8-compra-pai`
@@ -306,6 +341,8 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 **Mapeia para:** RF-15–17; RN-03.
 
 **Depende de:** V5 (lançamentos listáveis). Pode rodar em paralelo com V6–V7 após V5.
+
+**Adiada:** não é pré-requisito de V7.5 nem de V9; parcelas continuam lançamentos soltos até este slice existir.
 
 ---
 
@@ -327,7 +364,7 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 
 **Mapeia para:** metas não-funcionais ARCHITECTURE §10; produto §4.1 integral.
 
-**Depende de:** V6–V7 mínimo; V8 opcional.
+**Depende de:** V6–V7 mínimo **e V7.5**; V8 opcional (adiada).
 
 **Milestone:** **MVP pessoal utilizável**.
 
@@ -346,7 +383,8 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 | **Visão** | V5 | Tabela + toggle de regime |
 | **Caixa cartão** | V6 | Vincular pagamento; regimes completos |
 | **Dashboard** | V7 | Indicadores e gráficos |
-| **Parcelas** | V8 | Compra-pai informacional |
+| **Uso mensal** | V7.5 | Desvincular, reativar, filtros, caixa visível |
+| **Parcelas** | V8 | Compra-pai informacional (adiada) |
 | **MVP pessoal** | V9 | Checklist ponta a ponta |
 
 ---
@@ -395,7 +433,8 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Arquitetura técnica e API |
 | [.cursor/rules/architecture.mdc](../.cursor/rules/architecture.mdc) | Regras Cursor — fronteiras |
 | [.cursor/rules/quality-gate.mdc](../.cursor/rules/quality-gate.mdc) | Testes e Definition of Done (TDD no server; UI após implementação) |
-| `docs/epics/V0_PLATFORM.md` | *(a criar)* Spec detalhada V0 |
+| [docs/epics/V0_PLATFORM.md](./epics/V0_PLATFORM.md) | Spec detalhada V0 |
+| [docs/epics/V7_5_USABILIDADE.md](./epics/V7_5_USABILIDADE.md) | Spec V7.5 — usabilidade e reversibilidade |
 
 ---
 
@@ -408,3 +447,4 @@ Preocupações transversais (logging, validação, testes — TDD no server; Vit
 | 2026-09-02 | V2: bancos pré-cadastrados (seed) + cadastro on-demand; Account/Card com `bankId` |
 | 2026-09-03 | V7 Conta-only após V5 (sem V4/V6); link para spec V7_RELATORIOS |
 | 2026-09-03 | V4 faturas + import cartão: link para spec V4_FATURAS |
+| 2026-09-04 | V7.5 usabilidade e reversibilidade (antes do piloto); V8 adiada |

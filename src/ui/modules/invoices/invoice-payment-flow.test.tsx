@@ -178,6 +178,117 @@ describe('Invoice payment link UI', () => {
     expect(onLoaded).toHaveBeenCalled();
   });
 
+  it('unlinks a payment and shows aberta status', async () => {
+    const user = userEvent.setup();
+    const onLoaded = vi.fn();
+
+    const paidDetail = {
+      id: 'inv-3',
+      cardId: 'card-1',
+      referenceMonth: '2026-08-01',
+      dueDate: '2026-09-10',
+      balance: 0,
+      status: 'paid',
+      createdAt: '2026-08-01T00:00:00.000Z',
+      card: {
+        id: 'card-1',
+        label: 'Nubank Roxinho',
+        bank: { id: 'b1', name: 'Nubank' },
+      },
+      transactions: [
+        {
+          id: 'tx-card-1',
+          description: 'Mercado',
+          amount: -500,
+          type: 'EXPENSE',
+          competenceDate: '2026-08-15',
+          cashDate: '2026-09-10',
+          active: true,
+          category: {
+            id: 'food',
+            name: 'Alimentação',
+            color: '#2d6a4f',
+            icon: 'utensils',
+            kind: 'EXPENSE',
+            systemKey: null,
+          },
+        },
+      ],
+      payments: [
+        {
+          id: 'pay-1',
+          description: 'Pagamento fatura Nubank',
+          amount: -500,
+          type: 'INVOICE_PAYMENT',
+          competenceDate: '2026-09-10',
+          cashDate: '2026-09-10',
+          account: {
+            id: 'acc-1',
+            label: 'Conta Nubank',
+            bank: { id: 'b1', name: 'Nubank' },
+          },
+        },
+      ],
+    };
+
+    const openDetail = {
+      ...paidDetail,
+      balance: -500,
+      status: 'open',
+      payments: [],
+      transactions: [
+        {
+          ...paidDetail.transactions[0],
+          cashDate: null,
+        },
+      ],
+    };
+
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+
+      if (url === '/api/invoices/inv-3' && method === 'GET') {
+        return Response.json(paidDetail);
+      }
+      if (
+        url === '/api/invoices/inv-3/payments/pay-1' &&
+        method === 'DELETE'
+      ) {
+        return Response.json(openDetail);
+      }
+      return new Response(null, { status: 404 });
+    });
+
+    renderPanel(
+      <InvoiceDetailPanel
+        invoiceId="inv-3"
+        onBack={() => undefined}
+        onLoaded={onLoaded}
+      />,
+    );
+
+    expect(await screen.findByText(/Quitada/)).toBeInTheDocument();
+    expect(screen.getByText('Pagamento fatura Nubank')).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Remover vínculo de Pagamento fatura Nubank',
+      }),
+    );
+    const dialog = screen.getByRole('dialog', {
+      name: 'Remover vínculo do pagamento',
+    });
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Remover vínculo' }),
+    );
+
+    expect(await screen.findByText(/Aberta/)).toBeInTheDocument();
+    expect(screen.getByText('Nenhum pagamento vinculado ainda.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Vincular pagamento' })).toBeInTheDocument();
+    expect(onLoaded).toHaveBeenCalled();
+  });
+
   it('edits invoice due date', async () => {
     const user = userEvent.setup();
     const detail = {

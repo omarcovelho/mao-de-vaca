@@ -22,7 +22,7 @@ export type SummaryResponse = {
 };
 
 export type ByCategoryItem = {
-  categoryId: string;
+  categoryId: string | null;
   name: string;
   color: string;
   icon: string;

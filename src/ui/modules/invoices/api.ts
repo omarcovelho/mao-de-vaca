@@ -92,3 +92,19 @@ export async function linkPayments(
   }
   return response.json() as Promise<InvoiceDetail>;
 }
+
+export async function unlinkPayment(
+  invoiceId: string,
+  transactionId: string,
+): Promise<InvoiceDetail> {
+  const response = await jsonFetch(
+    `/api/invoices/${invoiceId}/payments/${transactionId}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, 'Não foi possível desvincular o pagamento'),
+    );
+  }
+  return response.json() as Promise<InvoiceDetail>;
+}

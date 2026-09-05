@@ -24,7 +24,13 @@ function formatMoney(value: number): string {
   });
 }
 
-function leafLancamentosPath(month: string, categoryId: string): string {
+function leafLancamentosPath(
+  month: string,
+  categoryId: string | null,
+): string | null {
+  if (!categoryId) {
+    return null;
+  }
   const query = new URLSearchParams({
     month,
     categoryId,

@@ -17,12 +17,16 @@ function formatPercent(value: number): string {
   })}%`;
 }
 
+function categoryKey(item: ByCategoryItem): string {
+  return item.categoryId ?? '__uncategorized__';
+}
+
 type CategoryBreakdownProps = {
   items: ByCategoryItem[];
   limit?: number;
   emptyMessage?: string;
   /** When set, leaf rows link to this path (e.g. lançamentos with filters). */
-  leafTo?: (item: ByCategoryItem) => string;
+  leafTo?: (item: ByCategoryItem) => string | null;
 };
 
 type CategoryBreakdownNodeProps = {
@@ -30,7 +34,7 @@ type CategoryBreakdownNodeProps = {
   depth: number;
   expandedIds: Set<string>;
   onToggle: (id: string) => void;
-  leafTo?: (item: ByCategoryItem) => string;
+  leafTo?: (item: ByCategoryItem) => string | null;
 };
 
 function CategoryBreakdownNode({
@@ -40,8 +44,9 @@ function CategoryBreakdownNode({
   onToggle,
   leafTo,
 }: CategoryBreakdownNodeProps) {
+  const key = categoryKey(item);
   const hasChildren = item.children.length > 0;
-  const expanded = expandedIds.has(item.categoryId);
+  const expanded = expandedIds.has(key);
   const href = !hasChildren && leafTo ? leafTo(item) : null;
 
   const name = href ? (
@@ -71,7 +76,7 @@ function CategoryBreakdownNode({
                 ? `Recolher ${item.name}`
                 : `Expandir ${item.name}`
             }
-            onClick={() => onToggle(item.categoryId)}
+            onClick={() => onToggle(key)}
           >
             {expanded ? '▾' : '▸'}
           </button>
@@ -119,7 +124,7 @@ function CategoryBreakdownNode({
         <ul className="category-breakdown category-breakdown--nested">
           {item.children.map((child) => (
             <CategoryBreakdownNode
-              key={child.categoryId}
+              key={categoryKey(child)}
               item={child}
               depth={depth + 1}
               expandedIds={expandedIds}
@@ -162,7 +167,7 @@ export function CategoryBreakdown({
     <ul className="category-breakdown">
       {visible.map((item) => (
         <CategoryBreakdownNode
-          key={item.categoryId}
+          key={categoryKey(item)}
           item={item}
           depth={0}
           expandedIds={expandedIds}

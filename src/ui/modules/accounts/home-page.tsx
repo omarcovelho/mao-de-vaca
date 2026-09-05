@@ -180,7 +180,9 @@ export function HomePage() {
                 <span className="tx-row__description" title={item.description}>
                   {item.description}
                 </span>
-                <span className="tx-row__category">{item.category.name}</span>
+                <span className="tx-row__category">
+                  {item.category?.name ?? 'Sem categoria'}
+                </span>
                 {item.card ? (
                   <span className="tx-row__account">
                     <CardOriginIcon className="tx-row__origin-icon" />
