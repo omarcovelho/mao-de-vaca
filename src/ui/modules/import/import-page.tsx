@@ -4,12 +4,14 @@ import { flattenCategoryLeaves, flattenCategoryParents, findCategoryLabel } from
 import type { CategoryLeafOption, CategoryNodeOption } from '../../components/category-leaves';
 import { ConfirmModal } from '../../components/confirm-modal';
 import { CreateImportCategoryModal } from '../../components/create-import-category-modal';
+import { FormModal } from '../../components/form-modal';
 import { MapExistingCategoryModal } from '../../components/map-existing-category-modal';
 import { PageHeader } from '../../components/page-header';
 import { SearchableSelect } from '../../components/searchable-select';
 import { useToast } from '../../components/toast';
 import { listCategories } from '../categories/api';
 import type { Category } from '../categories/types';
+import * as invoicesApi from '../invoices/api';
 import * as importApi from './api';
 import type {
   CategoryMappingValue,
@@ -203,6 +205,11 @@ export function ImportPage() {
     null,
   );
   const [existingModalCategoryId, setExistingModalCategoryId] = useState('');
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [referenceMonth, setReferenceMonth] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
+  const [invoiceFormError, setInvoiceFormError] = useState<string | null>(null);
 
   function applyCategoryTree(tree: Category[]) {
         setLeaves(
@@ -272,6 +279,13 @@ export function ImportPage() {
         : cardInvoices[0].id,
     );
   }, [cardInvoices]);
+
+  useEffect(() => {
+    setShowInvoiceForm(false);
+    setInvoiceFormError(null);
+    setReferenceMonth('');
+    setDueDate('');
+  }, [cardId]);
 
   const selectedCount = selectedLines.size;
 
@@ -365,6 +379,59 @@ export function ImportPage() {
     setImportMode(mode);
     handleFile(null);
     setResult(null);
+    setShowInvoiceForm(false);
+    setInvoiceFormError(null);
+  }
+
+  function closeInvoiceModal() {
+    if (invoiceSubmitting) {
+      return;
+    }
+    setShowInvoiceForm(false);
+    setInvoiceFormError(null);
+  }
+
+  function openInvoiceModal() {
+    if (!cardId) {
+      setError('Selecione um cartão antes de criar a fatura.');
+      return;
+    }
+    setInvoiceFormError(null);
+    setError(null);
+    setShowInvoiceForm(true);
+  }
+
+  async function handleCreateInvoice(event: FormEvent) {
+    event.preventDefault();
+    if (!cardId) {
+      setInvoiceFormError('Selecione um cartão antes de criar a fatura.');
+      return;
+    }
+    setInvoiceSubmitting(true);
+    setInvoiceFormError(null);
+    try {
+      const created = await invoicesApi.createInvoice(cardId, {
+        referenceMonth,
+        dueDate,
+      });
+      const nextOptions = await importApi.getImportOptions();
+      setOptions(nextOptions);
+      setInvoiceId(created.id);
+      setReferenceMonth('');
+      setDueDate('');
+      setShowInvoiceForm(false);
+      toast.success(
+        `Fatura ${formatMonth(created.referenceMonth)} criada.`,
+      );
+    } catch (err) {
+      setInvoiceFormError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível criar a fatura.',
+      );
+    } finally {
+      setInvoiceSubmitting(false);
+    }
   }
 
   function toggleLine(line: number) {
@@ -659,20 +726,27 @@ export function ImportPage() {
                 </div>
                 <div className="import-field">
                   <span className="import-field__label">Fatura</span>
-                  {cardInvoices.length === 0 ? (
-                    <p className="form-hint">
-                      Nenhuma fatura neste cartão.{' '}
-                      <Link to="/cartoes">Criar fatura</Link>
-                    </p>
-                  ) : (
-                    <SearchableSelect
-                      id="import-invoice"
-                      aria-label="Fatura"
-                      options={invoiceOptions}
-                      value={invoiceId}
-                      onChange={setInvoiceId}
-                    />
-                  )}
+                  <SearchableSelect
+                    id="import-invoice"
+                    aria-label="Fatura"
+                    options={invoiceOptions}
+                    value={invoiceId}
+                    onChange={setInvoiceId}
+                    disabled={!cardId}
+                    emptyMessage={
+                      cardId
+                        ? 'Nenhuma fatura neste cartão'
+                        : 'Selecione um cartão'
+                    }
+                    placeholder={
+                      cardId ? 'Selecione a fatura…' : 'Selecione um cartão…'
+                    }
+                    footerAction={{
+                      label: 'Nova fatura',
+                      onClick: openInvoiceModal,
+                      disabled: !cardId,
+                    }}
+                  />
                 </div>
               </>
             )}
@@ -1158,6 +1232,57 @@ export function ImportPage() {
           setExistingModalName(null);
         }}
       />
+
+      <FormModal
+        open={showInvoiceForm}
+        title="Nova fatura"
+        description="Cria a fatura para o cartão selecionado."
+        busy={invoiceSubmitting}
+        onClose={closeInvoiceModal}
+      >
+        <form onSubmit={handleCreateInvoice} className="form-stack">
+          <label>
+            Mês de referência
+            <input
+              type="month"
+              name="referenceMonth"
+              value={referenceMonth}
+              onChange={(event) => setReferenceMonth(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Vencimento
+            <input
+              type="date"
+              name="dueDate"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              required
+            />
+          </label>
+          {invoiceFormError ? (
+            <p role="alert">{invoiceFormError}</p>
+          ) : null}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={invoiceSubmitting}
+              onClick={closeInvoiceModal}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={invoiceSubmitting || !cardId}
+            >
+              {invoiceSubmitting ? 'Salvando…' : 'Criar fatura'}
+            </button>
+          </div>
+        </form>
+      </FormModal>
 
       <ConfirmModal
         open={confirmImportOpen}

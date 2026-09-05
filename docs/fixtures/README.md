@@ -15,6 +15,7 @@ Todas as linhas usam categorias **EXPENSE/INCOME** do seed (`A revisar`, `Salár
 | `2026-09-conta-corrente.csv` | Conta corrente (modo transações) | PIX **-1.200** (05/09); Aplicação CDB **-2.000** (08/09); Pagamento fatura **-590,15** (10/09) |
 | `2026-09-conta-poupanca.csv` | Conta poupança | PIX **+1.200** (05/09); Resgate CDB **+500** (15/09) |
 | `2026-09-fatura-cartao.csv` | Cartão, fatura **Ago/2026** (venc. 10/09) | Total líquido **-590,15** (igual ao débito de pagamento) |
+| `2026-01-fatura-cartao.csv` | Cartão, fatura **Jan/2026** (venc. sugerido 10/02) | Para testar **Nova fatura** em `/importar` |
 
 Fixtures V6 antigas (`extrato-conta-corrente.csv`, `fatura-cartao-mes.csv`, …) permanecem como referência legada.
 
