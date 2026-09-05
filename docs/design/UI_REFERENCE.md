@@ -1,124 +1,100 @@
 # Referência de UI — Mão de Vaca
 
-**Status:** Aprovado como direção visual (mockup interativo, set/2026)  
+**Status:** Dark theme (mockup + implementação, set/2026)  
 **Uso:** Consultar antes de implementar ou refinar telas em `src/ui/`.
 
-## Mockup interativo
+## Mockups
 
-O mockup completo está em [mao-de-vaca-ui-mockup.canvas.tsx](./mao-de-vaca-ui-mockup.canvas.tsx).
+| Artefato | Uso |
+|----------|-----|
+| [dark-theme-mockup.html](./dark-theme-mockup.html) | **Direção atual** — dark theme, shell unificado, criação via modal |
+| [mao-de-vaca-ui-mockup.canvas.tsx](./mao-de-vaca-ui-mockup.canvas.tsx) | Mockup light histórico (superseded) |
 
-Para visualizar no Cursor: abra o arquivo `.canvas.tsx` na pasta `canvases/` do projeto no IDE (cópia interativa em `~/.cursor/projects/.../canvases/mao-de-vaca-ui-mockup.canvas.tsx`). Use os chips no topo para alternar entre telas.
-
-> O arquivo em `docs/design/` é a **fonte versionada no git**. O canvas no IDE é a cópia interativa — mantenha os dois sincronizados se o mockup evoluir.
+Abra o HTML no navegador e use os chips no topo para alternar telas.
 
 ## Princípios
 
 1. **Calmo e focado** — uma ideia principal por tela; poucos números visíveis de uma vez.
 2. **Hierarquia clara** — métrica hero grande; detalhes em texto menor e tons secundários.
 3. **Regime sempre acessível** — toggle competência / caixa em pills no cabeçalho das telas que exibem valores.
-4. **Ações secundárias discretas** — botões ghost; CTA primário único por contexto.
-5. **Listas curtas** — home mostra 3 itens + link “Ver todos”; telas dedicadas para listas completas.
+4. **Ações distinguíveis** — primary / secondary / ghost com contraste no dark; nunca confiar só em texto sem borda/fundo.
+5. **Criação em modal** — CTAs no cabeçalho abrem modal; formulários de create/edit **não** ficam embutidos na página (exceto onboarding e wizard de importação).
+6. **Listas curtas** — home mostra 3 itens + link “Ver todos”; telas dedicadas para listas completas.
 
 ## Layout
 
 | Elemento | Especificação |
 |----------|---------------|
-| Navegação | Sidebar fixa (~200px), não header horizontal |
-| Área de conteúdo | Fundo quente claro, padding generoso (28–32px) |
-| Largura máxima | Conteúdo centralizado; formulários ~360–440px |
-| Tipografia | Sans-serif limpa; hero ~36px semibold; labels 13–14px |
+| Navegação | Sidebar fixa (~220px), fundo `--bg-elevated` |
+| Área de conteúdo | Fundo `--bg`, padding generoso (28–32px) |
+| Tipografia | DM Sans; hero ~36px semibold; labels 13–14px |
 
-## Paleta (planejada para `src/ui/styles.css`)
+## Paleta (`src/ui/styles.css`)
 
 | Token | Valor | Uso |
 |-------|-------|-----|
-| `--bg` | `#f7f5f2` | Fundo da aplicação |
-| `--surface` | `#ffffff` | Cards, sidebar |
-| `--text` | `#1a1a1a` | Texto principal |
-| `--text-muted` | `#444` / `#6b6560` | Subtítulos, metadados |
-| `--border` | `#e0dcd4` | Divisores, bordas sutis |
-| `--accent` | `#2d6a4f` | Links ativos, botão primário, pill ativa |
-| `--accent-hover` | `#245a42` | Hover do primário |
+| `--bg` | `#12151a` | Fundo da aplicação |
+| `--bg-elevated` | `#181c23` | Sidebar |
+| `--surface` | `#1e2430` | Cards, modais, painéis |
+| `--surface-muted` / `--surface-hover` | `#262d3b` | Hover / seleção |
+| `--text` | `#e8eaef` | Texto principal |
+| `--text-muted` | `#9aa3b5` | Subtítulos, metadados |
+| `--border` / `--border-strong` | `#2c3444` / `#3d4759` | Divisores, inputs |
+| `--accent` | `#3d9b6e` | CTA primário, pill ativa |
+| `--accent-contrast` | `#0c1210` | Texto sobre accent |
+| `--accent-soft` | verde ~16% | Nav ativa, fundos soft |
+| `--expense` / `--income` | `#f0a0a0` / `#7dcea0` | Valores signed |
+
+`color-scheme: dark` no `:root`.
+
+## Hierarquia de botões
+
+| Variante | Aparência | Uso |
+|----------|-----------|-----|
+| `btn--primary` | Verde sólido, texto escuro | CTA único de criação / confirmar |
+| `btn--secondary` | Borda visível, fundo transparente | Ação importante na linha (Nova sub, Vincular, Ver) |
+| `btn--ghost` | Sem borda; no hover ganha fundo + borda | Ações secundárias (Editar, Cancelar) |
+| `btn--danger` | Fundo danger soft + texto danger | Desativar / destrutivo |
+
+## Modais
+
+- Componente: `FormModal` (`src/ui/components/form-modal.tsx`) + `ConfirmModal` para confirmações.
+- Contas / cartões / categorias / nova fatura: create (e edit de categoria) via modal.
+- **Exceções:** onboarding (formulário inline guiado); importação (wizard multi-etapas na página).
 
 ## Navegação
 
-| Rota (planejada) | Label na sidebar | Épico |
-|------------------|------------------|-------|
-| `/` | Visão geral | V7 (relatórios / dashboard) |
-| `/lancamentos` | Lançamentos | V5 |
-| `/importar` | Importar | V3 / V4 |
-| `/contas` | Contas | V2 |
-| `/cartoes` | Cartões | V2 / V4 (faturas) |
-| `/categorias` | Categorias | V2.5 |
-| `/relatorios` | Relatórios | V7 |
+| Rota | Label na sidebar |
+|------|------------------|
+| `/` | Visão geral |
+| `/lancamentos` | Lançamentos |
+| `/importar` | Importar |
+| `/contas` | Contas |
+| `/cartoes` | Cartões |
+| `/categorias` | Categorias |
+| `/relatorios` | Relatórios |
 
 Login (`/login`) e onboarding ficam fora da sidebar.
 
-## Telas
+## Telas (resumo)
 
 ### Login
-- Centralizado, sem sidebar.
-- Logo + tagline; card único com usuário, senha e botão “Entrar”.
+- Centralizado, sem sidebar; brand com acento verde; card de credenciais.
 
-### Onboarding
-- Dentro do shell com sidebar; conteúdo centralizado.
-- Título “Vamos começar”; dois CTAs (conta / cartão) + “Pular por agora”.
+### Contas / Cartões / Categorias
+- Lista limpa + CTA no header → modal.
+- Ações de linha com secondary/danger visíveis (não só ghost oculto).
 
-### Visão geral (home)
-- Cabeçalho: mês/ano + toggle regime.
-- **Hero:** valor total do mês (único número grande).
-- **Por categoria:** barra de uso + top 3 com percentual e valor.
-- **Recentes:** 3 lançamentos + “Ver todos”.
-
-### Lançamentos
-- Seletor de **mês** + toggle de **regime** (competência / caixa).
-- Por padrão lista **todas as contas**; filtros opcionais: categoria, conta, data de, data até.
-- Lista em **uma linha** por lançamento: data, descrição, categoria (editável), conta + banco, valor; ação **Desativar**.
+### Cartões — faturas
+- “Nova fatura” abre modal (mês + vencimento).
 
 ### Importar
-- Tipo: pills “Extrato de conta” / “Fatura de cartão”.
-- Extrato: select de conta ativa + parser.
-- Fatura: select de cartão + fatura + parser; hint para remover linhas de pagamento do CSV.
-- Zona de drag-and-drop para CSV + “Pré-visualizar”.
-- Pré-visualização com valores signed, tipo derivado, categorias desconhecidas (mapear ou criar) e “Confirmar importação”.
-- Resumo (criados / ignorados) e histórico de lotes.
+- Fluxo permanece na página; criação auxiliar (ex.: fatura) em modal quando aplicável.
 
-### Contas
-- Apenas contas bancárias (corrente, poupança).
-- Cada item: apelido, pill do banco, “Editar”.
-- CTA “Adicionar conta” no cabeçalho.
-
-### Cartões
-- Seletor de cartão (pills no topo) — um cartão por vez.
-- **Hero:** saldo em aberto da fatura atual (aberta ou parcial), com referência e vencimento.
-- **Lista de faturas** do cartão selecionado: mês de referência, status (Aberta / Parcial / Quitada), vencimento, total e saldo.
-- **Detalhe da fatura** (ao clicar “Ver”): lançamentos da fatura (compras/estornos) + “Vincular pagamento” quando não quitada.
-- CTA “Adicionar cartão” no cabeçalho.
-
-Status de fatura derivados do domínio: aberta, parcial, quitada (RN do saldo = compras − estornos − pagamentos vinculados).
-
-### Categorias
-- Árvore **compacta e recolhível**: raízes fechadas por padrão; expandir para ver filhos.
-- Linha densa com ícone linear minimalista (cor do swatch), nome e tipo só na raiz.
-- CTA no cabeçalho: “Nova categoria”. “Nova subcategoria” na linha da categoria/subcategoria (oculto no depth 5).
-- Formulário de filha indica o pai (“Em {nome}”); nome, cor, ícone; editar nome/cor/ícone; desativar.
-- Banner soft na home quando `hasCategories` é false (recomendado; dismissível).
-
-### Relatórios
-- 3 stats em linha (gastos do mês, maior categoria, variação %).
-- Gráfico de barras — evolução 6 meses.
-- Barra de distribuição por categoria.
-
-## Componentes reutilizáveis (a extrair na implementação)
+## Componentes reutilizáveis
 
 - `AppShell` — sidebar + área principal
-- `PageHeader` — título, subtítulo opcional, slot `trailing` (ex.: regime toggle)
+- `PageHeader` — título, subtítulo, slot `trailing`
+- `FormModal` / `ConfirmModal`
 - `RegimeToggle` — pills competência / caixa
-- `TransactionRow` — linha de lançamento (descrição, meta, valor)
-- `CategoryBreakdown` — usage bar + lista top N
-- `InvoiceRow` — linha de fatura (referência, status, vencimento, saldo)
-- `CardSelector` — pills para alternar cartão ativo
-
-## Relação com a UI atual
-
-A implementação em `src/ui/` usa sidebar + tokens CSS. Faturas listadas/criadas em `/cartoes` (V4); vínculo de pagamento no detalhe fica para V6.
+- Demais: `TransactionRow`, `CategoryBreakdown`, etc.

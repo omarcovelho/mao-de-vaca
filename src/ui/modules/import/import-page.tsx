@@ -1067,7 +1067,7 @@ export function ImportPage() {
                 </span>
                 <button
                   type="button"
-                  className="btn btn--ghost btn--icon import-history__delete"
+                  className="btn btn--ghost btn--icon btn--icon-danger import-history__delete"
                   disabled={busy !== null}
                   aria-label={`Excluir importação ${item.fileName}`}
                   title="Excluir"

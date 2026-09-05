@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../../components/page-header';
-import {
-  AccountOriginIcon,
-  CardOriginIcon,
-} from '../../components/origin-icon';
 import { RegimeToggle } from '../../components/regime-toggle';
 import { CategoriesSetupBanner } from '../categories/categories-setup-banner';
 import * as reportsApi from '../reports/api';
 import { CategoryBreakdown } from '../reports/category-breakdown';
 import type { ByCategoryItem } from '../reports/types';
 import * as transactionsApi from '../transactions/api';
+import { TxCategoryChip } from '../transactions/tx-category-chip';
+import { TxOrigin } from '../transactions/tx-origin';
 import { formatMonthLabel, monthBounds, toMonthKey } from '../transactions/month';
 import { useRegime } from '../transactions/regime-context';
 import type { TransactionItem } from '../transactions/types';
@@ -176,26 +174,14 @@ export function HomePage() {
         ) : (
           <ul className="tx-rows">
             {recent.map((item) => (
-              <li key={item.id} className="tx-row">
+              <li key={item.id} className="tx-row tx-row--recent">
                 <span className="tx-row__description" title={item.description}>
                   {item.description}
                 </span>
                 <span className="tx-row__category">
-                  {item.category?.name ?? 'Sem categoria'}
+                  <TxCategoryChip category={item.category} />
                 </span>
-                {item.card ? (
-                  <span className="tx-row__account">
-                    <CardOriginIcon className="tx-row__origin-icon" />
-                    <span className="tx-row__account-label">{item.card.label}</span>
-                    <span className="bank-pill">{item.card.bank.name}</span>
-                  </span>
-                ) : item.account ? (
-                  <span className="tx-row__account">
-                    <AccountOriginIcon className="tx-row__origin-icon" />
-                    <span className="tx-row__account-label">{item.account.label}</span>
-                    <span className="bank-pill">{item.account.bank.name}</span>
-                  </span>
-                ) : null}
+                <TxOrigin item={item} />
                 <span
                   className={`tx-row__amount${
                     item.type === 'EXPENSE' ? ' tx-row__amount--expense' : ''

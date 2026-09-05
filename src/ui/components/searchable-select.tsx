@@ -121,6 +121,7 @@ export function SearchableSelect({
   function onFilterKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'Escape') {
       event.preventDefault();
+      event.stopPropagation();
       close();
       return;
     }

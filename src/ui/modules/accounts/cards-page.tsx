@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ConfirmModal } from '../../components/confirm-modal';
+import { FormModal } from '../../components/form-modal';
 import { PageHeader } from '../../components/page-header';
 import { useToast } from '../../components/toast';
 import * as accountsApi from './api';
@@ -58,6 +59,16 @@ function statusLabel(status: Invoice['status']): string {
     return 'Parcial';
   }
   return 'Quitada';
+}
+
+function statusPillClass(status: Invoice['status']): string {
+  if (status === 'open') {
+    return 'status-pill status-pill--warning';
+  }
+  if (status === 'partial') {
+    return 'status-pill status-pill--info';
+  }
+  return 'status-pill status-pill--success';
 }
 
 export function CardsPage() {
@@ -302,6 +313,38 @@ export function CardsPage() {
     );
   }
 
+  function closeCardModal() {
+    if (submitting) {
+      return;
+    }
+    setShowForm(false);
+    setError(null);
+  }
+
+  function closeInvoiceModal() {
+    if (invoiceSubmitting) {
+      return;
+    }
+    setShowInvoiceForm(false);
+  }
+
+  if (invoiceIdParam) {
+    return (
+      <section className="page">
+        {error ? (
+          <p className="alert" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <InvoiceDetailPanel
+          invoiceId={invoiceIdParam}
+          onBack={closeInvoiceDetail}
+          onLoaded={handleInvoiceLoaded}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="page">
       <PageHeader
@@ -311,44 +354,17 @@ export function CardsPage() {
           <button
             type="button"
             className="btn btn--primary"
-            onClick={() => setShowForm((open) => !open)}
+            onClick={() => {
+              setError(null);
+              setShowForm(true);
+            }}
           >
-            {showForm ? 'Cancelar' : 'Adicionar cartão'}
+            Adicionar cartão
           </button>
         }
       />
 
-      {showForm ? (
-        <form onSubmit={handleSubmit} className="form-panel">
-          <h2 className="form-panel__title">Novo cartão</h2>
-          <div className="form-stack">
-            <label>
-              Apelido
-              <input
-                name="label"
-                value={label}
-                onChange={(event) => setLabel(event.target.value)}
-                required
-              />
-            </label>
-            <BankFields
-              bankId={bankId}
-              onBankIdChange={setBankId}
-              onError={setError}
-            />
-            {error ? <p role="alert">{error}</p> : null}
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={submitting || !bankId}
-            >
-              {submitting ? 'Salvando…' : 'Adicionar cartão'}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
-      {!showForm && error ? (
+      {error && !showForm && !showInvoiceForm ? (
         <p className="alert" role="alert">
           {error}
         </p>
@@ -368,9 +384,6 @@ export function CardsPage() {
                 className={`pill${selectedCard?.id === item.id ? ' pill--active' : ''}`}
                 onClick={() => {
                   setSelectedCardId(item.id);
-                  if (invoiceIdParam) {
-                    closeInvoiceDetail();
-                  }
                 }}
                 aria-pressed={selectedCard?.id === item.id}
               >
@@ -382,14 +395,35 @@ export function CardsPage() {
           {selectedCard ? (
             <>
               <div className="hero-metric">
-                <p className="hero-metric__value">
+                <p className="panel__eyebrow">Saldo em aberto</p>
+                <p
+                  className={`hero-metric__value${
+                    openInvoice && openInvoice.balance > 0
+                      ? ' hero-metric__value--expense'
+                      : ''
+                  }`}
+                >
                   {openInvoice ? formatMoney(openInvoice.balance) : '—'}
                 </p>
                 <p className="hero-metric__label">
                   {openInvoice
-                    ? `Saldo em aberto · fatura ${formatMonth(openInvoice.referenceMonth)} · vence ${formatDueDate(openInvoice.dueDate)}`
-                    : `Saldo em aberto · ${selectedCard.label}`}
+                    ? `Fatura ${formatMonth(openInvoice.referenceMonth)} · vence ${formatDueDate(openInvoice.dueDate)}`
+                    : selectedCard.label}
                 </p>
+                {openInvoice ? (
+                  <div className="hero-metric__meta">
+                    <span className={statusPillClass(openInvoice.status)}>
+                      {statusLabel(openInvoice.status)}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => openInvoiceDetail(openInvoice.id)}
+                    >
+                      Ver fatura
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <section className="section" aria-labelledby="invoices-heading">
@@ -400,14 +434,14 @@ export function CardsPage() {
                   <div className="section__actions">
                     <button
                       type="button"
-                      className="btn btn--ghost"
-                      onClick={() => setShowInvoiceForm((open) => !open)}
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => setShowInvoiceForm(true)}
                     >
-                      {showInvoiceForm ? 'Cancelar' : 'Nova fatura'}
+                      Nova fatura
                     </button>
                     <button
                       type="button"
-                      className="btn btn--ghost"
+                      className="btn btn--danger btn--sm"
                       onClick={() => setDeactivateId(selectedCard.id)}
                     >
                       Desativar cartão
@@ -415,87 +449,162 @@ export function CardsPage() {
                   </div>
                 </div>
 
-                {showInvoiceForm ? (
-                  <form onSubmit={handleCreateInvoice} className="form-panel">
-                    <h3 className="form-panel__title">Nova fatura</h3>
-                    <div className="form-stack">
-                      <label>
-                        Mês de referência
-                        <input
-                          type="month"
-                          name="referenceMonth"
-                          value={referenceMonth}
-                          onChange={(event) =>
-                            setReferenceMonth(event.target.value)
-                          }
-                          required
-                        />
-                      </label>
-                      <label>
-                        Vencimento
-                        <input
-                          type="date"
-                          name="dueDate"
-                          value={dueDate}
-                          onChange={(event) => setDueDate(event.target.value)}
-                          required
-                        />
-                      </label>
-                      <button
-                        type="submit"
-                        className="btn btn--primary"
-                        disabled={invoiceSubmitting}
-                      >
-                        {invoiceSubmitting ? 'Salvando…' : 'Criar fatura'}
-                      </button>
-                    </div>
-                  </form>
-                ) : null}
-
-                {invoiceIdParam ? (
-                  <InvoiceDetailPanel
-                    invoiceId={invoiceIdParam}
-                    onBack={closeInvoiceDetail}
-                    onLoaded={handleInvoiceLoaded}
-                  />
-                ) : invoicesLoading ? (
+                {invoicesLoading ? (
                   <p className="page__empty">Carregando faturas…</p>
                 ) : invoices.length === 0 ? (
-                  <p className="page__empty">
-                    Nenhuma fatura ainda. Crie uma fatura e{' '}
-                    <Link to="/importar">importe o CSV do cartão</Link>.
-                  </p>
+                  <div className="surface-panel">
+                    <p className="page__empty" style={{ margin: 0 }}>
+                      Nenhuma fatura ainda.
+                    </p>
+                    <div className="section__actions" style={{ marginTop: '1rem' }}>
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--sm"
+                        onClick={() => setShowInvoiceForm(true)}
+                      >
+                        Nova fatura
+                      </button>
+                      <Link to="/importar" className="btn btn--secondary btn--sm">
+                        Importar CSV
+                      </Link>
+                    </div>
+                  </div>
                 ) : (
-                  <ul className="list-rows">
-                    {invoices.map((invoice) => (
-                      <li key={invoice.id}>
-                        <button
-                          type="button"
-                          className="list-row list-row--button"
-                          onClick={() => openInvoiceDetail(invoice.id)}
-                        >
+                  <div className="surface-panel">
+                    <ul className="list-rows">
+                      {invoices.map((invoice) => (
+                        <li key={invoice.id} className="list-row">
                           <div className="list-row__main">
-                            <p className="list-row__title">
-                              {formatMonth(invoice.referenceMonth)}
-                            </p>
-                            <p className="list-row__meta">
-                              Vence {formatDueDate(invoice.dueDate)} ·{' '}
-                              {statusLabel(invoice.status)}
-                            </p>
+                            <div className="list-row__title-row">
+                              <span className="list-row__title">
+                                {formatMonth(invoice.referenceMonth)}
+                              </span>
+                              <span className={statusPillClass(invoice.status)}>
+                                {statusLabel(invoice.status)}
+                              </span>
+                            </div>
+                            <span className="list-row__meta">
+                              Vence {formatDueDate(invoice.dueDate)}
+                            </span>
                           </div>
-                          <p className="list-row__value">
-                            {formatMoney(invoice.balance)}
-                          </p>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                          <div className="list-row__actions">
+                            <span
+                              className={`list-row__value${
+                                invoice.balance > 0 ? ' list-row__value--expense' : ''
+                              }`}
+                            >
+                              {formatMoney(invoice.balance)}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              onClick={() => openInvoiceDetail(invoice.id)}
+                            >
+                              Ver
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </section>
             </>
           ) : null}
         </>
       )}
+
+      <FormModal
+        open={showForm}
+        title="Novo cartão"
+        description="Cartão de crédito vinculado a um banco."
+        busy={submitting}
+        onClose={closeCardModal}
+      >
+        <form onSubmit={handleSubmit} className="form-stack">
+          <label>
+            Apelido
+            <input
+              name="label"
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              required
+            />
+          </label>
+          <BankFields
+            bankId={bankId}
+            onBankIdChange={setBankId}
+            onError={setError}
+          />
+          {error ? <p role="alert">{error}</p> : null}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={submitting}
+              onClick={closeCardModal}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={submitting || !bankId}
+            >
+              {submitting ? 'Salvando…' : 'Adicionar cartão'}
+            </button>
+          </div>
+        </form>
+      </FormModal>
+
+      <FormModal
+        open={showInvoiceForm}
+        title="Nova fatura"
+        description="Cria a fatura para o cartão selecionado."
+        busy={invoiceSubmitting}
+        onClose={closeInvoiceModal}
+      >
+        <form onSubmit={handleCreateInvoice} className="form-stack">
+          <label>
+            Mês de referência
+            <input
+              type="month"
+              name="referenceMonth"
+              value={referenceMonth}
+              onChange={(event) => setReferenceMonth(event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Vencimento
+            <input
+              type="date"
+              name="dueDate"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              required
+            />
+          </label>
+          {error ? <p role="alert">{error}</p> : null}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={invoiceSubmitting}
+              onClick={closeInvoiceModal}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={invoiceSubmitting}
+            >
+              {invoiceSubmitting ? 'Salvando…' : 'Criar fatura'}
+            </button>
+          </div>
+        </form>
+      </FormModal>
 
       <ConfirmModal
         open={deactivateId !== null}

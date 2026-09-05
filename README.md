@@ -73,4 +73,4 @@ npm run dev
 | `npm run build` | Build da UI (`dist/ui`) e do server |
 | `npm start` | Sobe o server em produção (serve SPA + API) |
 | `npm run lint` | ESLint com `--fix` em server e ui |
-| `npm test` | Jest (server) + Vitest (ui) |
+| `npm test` | Jest (server) |

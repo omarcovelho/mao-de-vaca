@@ -28,7 +28,9 @@ export function AppShell() {
     return (
       <div className="app-setup">
         <header className="app-setup__header">
-          <p className="app-setup__brand">Mão de Vaca</p>
+          <p className="app-setup__brand">
+            Mão de <span className="app-sidebar__brand-accent">Vaca</span>
+          </p>
           <button
             type="button"
             className="btn btn--ghost"
@@ -47,7 +49,9 @@ export function AppShell() {
   return (
     <div className="app-layout">
       <aside className="app-sidebar" aria-label="Navegação principal">
-        <p className="app-sidebar__brand">Mão de Vaca</p>
+        <p className="app-sidebar__brand">
+          Mão de <span className="app-sidebar__brand-accent">Vaca</span>
+        </p>
         <nav className="app-sidebar__nav">
           {NAV_ITEMS.map((item) => (
             <NavLink

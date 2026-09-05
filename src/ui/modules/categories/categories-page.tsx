@@ -1,15 +1,20 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ConfirmModal } from '../../components/confirm-modal';
+import { FormModal } from '../../components/form-modal';
 import { PageHeader } from '../../components/page-header';
 import { SearchableSelect } from '../../components/searchable-select';
 import { useToast } from '../../components/toast';
 import * as categoriesApi from './api';
 import {
-  CATEGORY_ICON_OPTIONS,
-  CategoryIcon,
+  CategoryIconPicker,
   KIND_LABELS,
+  PencilGlyph,
+  PlusGlyph,
+  TrashGlyph,
 } from './category-icons';
+import { ColorSwatchPicker } from './color-swatch-picker';
 import type { Category, CategoryKind } from './types';
+import { TxCategoryChip } from '../transactions/tx-category-chip';
 
 const MAX_DEPTH = 5;
 
@@ -17,11 +22,6 @@ const KIND_OPTIONS = [
   { value: 'EXPENSE', label: 'Gasto' },
   { value: 'INCOME', label: 'Renda' },
 ];
-
-const ICON_OPTIONS = CATEGORY_ICON_OPTIONS.map((option) => ({
-  value: option.key,
-  label: option.label,
-}));
 
 function CategoryTreeRows({
   nodes,
@@ -48,7 +48,7 @@ function CategoryTreeRows({
           <li key={node.id} className="category-tree__item">
             <div
               className="category-row"
-              style={{ paddingLeft: `${0.5 + (node.depth - 1) * 0.85}rem` }}
+              style={{ ['--indent' as string]: `${(node.depth - 1) * 1.15}rem` }}
             >
               {hasChildren ? (
                 <button
@@ -64,54 +64,50 @@ function CategoryTreeRows({
                 <span className="category-row__toggle category-row__toggle--spacer" />
               )}
 
-              <span
-                className="category-swatch"
-                style={{ ['--swatch' as string]: node.color }}
-                aria-hidden
-              >
-                <CategoryIcon icon={node.icon} />
-              </span>
-
-              <div className="category-row__body">
-                <span className="category-row__name">{node.name}</span>
-                {node.depth === 1 ? (
-                  <span className="category-row__kind">
-                    {KIND_LABELS[node.kind] ?? node.kind}
-                  </span>
-                ) : null}
+              <div className="category-row__identity">
+                <TxCategoryChip category={node} />
               </div>
+
+              <span className="category-row__kind">
+                {node.depth === 1 ? (KIND_LABELS[node.kind] ?? node.kind) : ''}
+                {node.systemKey
+                  ? node.depth === 1
+                    ? ' · Sistema'
+                    : 'Sistema'
+                  : ''}
+              </span>
 
               <div className="category-row__actions">
                 {!node.systemKey && node.depth < MAX_DEPTH ? (
                   <button
                     type="button"
-                    className="btn btn--ghost btn--compact"
+                    className="btn btn--ghost btn--icon"
+                    aria-label={`Nova subcategoria em ${node.name}`}
                     onClick={() => onAddChild(node)}
                   >
-                    Nova subcategoria
-                    <span className="visually-hidden"> em {node.name}</span>
+                    <PlusGlyph />
                   </button>
                 ) : null}
                 {!node.systemKey ? (
                   <button
                     type="button"
-                    className="btn btn--ghost btn--compact"
+                    className="btn btn--ghost btn--icon"
+                    aria-label={`Editar ${node.name}`}
                     onClick={() => onEdit(node)}
                   >
-                    Editar
+                    <PencilGlyph />
                   </button>
                 ) : null}
                 {!node.systemKey ? (
                   <button
                     type="button"
-                    className="btn btn--ghost btn--compact"
+                    className="btn btn--ghost btn--icon btn--icon-danger"
+                    aria-label={`Desativar ${node.name}`}
                     onClick={() => onDeactivate(node.id)}
                   >
-                    Desativar
+                    <TrashGlyph />
                   </button>
-                ) : (
-                  <span className="category-row__kind">Sistema</span>
-                )}
+                ) : null}
               </div>
             </div>
 
@@ -290,6 +286,20 @@ export function CategoriesPage() {
     return null;
   }
 
+  function closeFormModal() {
+    if (submitting) {
+      return;
+    }
+    resetForm();
+    setShowForm(false);
+  }
+
+  const formTitle = editing
+    ? 'Editar categoria'
+    : mode === 'root'
+      ? 'Nova categoria'
+      : 'Nova subcategoria';
+
   return (
     <section className="page">
       <PageHeader
@@ -306,93 +316,10 @@ export function CategoriesPage() {
         }
       />
 
-      {error ? <p className="alert" role="alert">{error}</p> : null}
-
-      {showForm ? (
-        <form className="form-panel" onSubmit={(e) => void handleSubmit(e)}>
-          <h2 className="form-panel__title">
-            {editing
-              ? 'Editar categoria'
-              : mode === 'root'
-                ? 'Nova categoria'
-                : 'Nova subcategoria'}
-          </h2>
-          <div className="form-stack">
-            <label>
-              Nome
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
-
-            {!editing && mode === 'root' ? (
-              <label>
-                Tipo
-                <SearchableSelect
-                  aria-label="Tipo"
-                  options={KIND_OPTIONS}
-                  value={kind}
-                  onChange={(value) => setKind(value as CategoryKind)}
-                />
-              </label>
-            ) : null}
-
-            {!editing && mode === 'child' ? (
-              <p className="form-hint">Em {parentName}</p>
-            ) : null}
-
-            <label>
-              Cor
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-              />
-            </label>
-
-            <label>
-              Ícone
-              <SearchableSelect
-                aria-label="Ícone"
-                options={ICON_OPTIONS}
-                value={icon}
-                onChange={setIcon}
-              />
-            </label>
-
-            <div className="category-icon-preview" aria-hidden>
-              <span
-                className="category-swatch"
-                style={{ ['--swatch' as string]: color }}
-              >
-                <CategoryIcon icon={icon} />
-              </span>
-              <span className="category-icon-preview__label">Pré-visualização</span>
-            </div>
-
-            <div className="form-actions">
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  resetForm();
-                  setShowForm(false);
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="btn btn--primary"
-                disabled={submitting}
-              >
-                {submitting ? 'Salvando…' : 'Salvar'}
-              </button>
-            </div>
-          </div>
-        </form>
+      {error && !showForm ? (
+        <p className="alert" role="alert">
+          {error}
+        </p>
       ) : null}
 
       {loading ? (
@@ -412,6 +339,89 @@ export function CategoriesPage() {
           onDeactivate={setDeactivateId}
         />
       )}
+
+      <FormModal
+        open={showForm}
+        title={formTitle}
+        description={
+          !editing && mode === 'child' ? (
+            <>Em <strong>{parentName}</strong></>
+          ) : editing ? (
+            'Atualize nome, cor ou ícone desta categoria.'
+          ) : (
+            'Categoria raiz (folha ou pai de subcategorias).'
+          )
+        }
+        wide
+        busy={submitting}
+        onClose={closeFormModal}
+      >
+        <form className="form-stack" onSubmit={(e) => void handleSubmit(e)}>
+          <label>
+            Nome
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </label>
+
+          {!editing && mode === 'root' ? (
+            <label>
+              Tipo
+              <SearchableSelect
+                aria-label="Tipo"
+                options={KIND_OPTIONS}
+                value={kind}
+                onChange={(value) => setKind(value as CategoryKind)}
+              />
+            </label>
+          ) : null}
+
+          <div className="form-field">
+            <span className="form-label" id="category-color-label">
+              Cor
+            </span>
+            <ColorSwatchPicker
+              value={color}
+              labelledBy="category-color-label"
+              onChange={setColor}
+            />
+          </div>
+
+          <div className="form-field">
+            <span className="form-label" id="category-icon-label">
+              Ícone
+            </span>
+            <CategoryIconPicker
+              value={icon}
+              color={color}
+              labelledBy="category-icon-label"
+              onChange={setIcon}
+            />
+          </div>
+
+          {error ? <p role="alert">{error}</p> : null}
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={submitting}
+              onClick={closeFormModal}
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="btn btn--primary"
+              disabled={submitting}
+            >
+              {submitting ? 'Salvando…' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </FormModal>
 
       <ConfirmModal
         open={deactivateId !== null}
