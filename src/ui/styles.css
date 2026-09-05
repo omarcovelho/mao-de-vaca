@@ -428,6 +428,13 @@ a {
   font-size: 0.8125rem;
 }
 
+.section__hint--actions {
+  max-width: 16rem;
+  text-align: right;
+  align-self: center;
+  margin: 0;
+}
+
 .btn {
   font: inherit;
   padding: 0.5rem 1rem;
@@ -1072,7 +1079,15 @@ a {
 }
 
 .tx-rows--invoice .tx-row--compact {
-  grid-template-columns: 2.5rem minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  grid-template-columns: 5.5rem minmax(0, 1.4fr) minmax(0, 1fr) auto;
+}
+
+.tx-rows--invoice .tx-row--compact.tx-row--with-action {
+  grid-template-columns: 5.5rem minmax(0, 1.2fr) minmax(0, 0.9fr) auto auto;
+}
+
+.tx-rows--invoice .tx-row--compact.tx-row--pick {
+  grid-template-columns: minmax(0, 1.6fr) 6.5rem auto;
 }
 
 .tx-row__account-label {

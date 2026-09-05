@@ -34,7 +34,7 @@ export type InvoiceTransaction = {
     icon: string;
     kind: 'EXPENSE' | 'INCOME' | 'NON_EXPENSE';
     systemKey?: string | null;
-  };
+  } | null;
 };
 
 export type InvoicePayment = {

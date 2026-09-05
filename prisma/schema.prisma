@@ -93,6 +93,7 @@ model Category {
   parent       Category?     @relation("CategoryTree", fields: [parentId], references: [id])
   children     Category[]    @relation("CategoryTree")
   transactions Transaction[]
+  previousPaymentLinks InvoicePaymentLink[] @relation("PreviousPaymentCategory")
 
   @@unique([userId, systemKey])
   @@index([userId])
@@ -132,18 +133,21 @@ model Invoice {
 }
 
 model InvoicePaymentLink {
-  id            String      @id @default(cuid())
-  userId        String
-  invoiceId     String
-  transactionId String
-  createdAt     DateTime    @default(now())
-  user          User        @relation(fields: [userId], references: [id])
-  invoice       Invoice     @relation(fields: [invoiceId], references: [id])
-  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  id                  String      @id @default(cuid())
+  userId              String
+  invoiceId           String
+  transactionId       String
+  previousCategoryId  String?
+  createdAt           DateTime    @default(now())
+  user                User        @relation(fields: [userId], references: [id])
+  invoice             Invoice     @relation(fields: [invoiceId], references: [id])
+  transaction         Transaction @relation(fields: [transactionId], references: [id])
+  previousCategory    Category?   @relation("PreviousPaymentCategory", fields: [previousCategoryId], references: [id], onDelete: SetNull)
 
   @@unique([transactionId])
   @@index([userId])
   @@index([invoiceId])
+  @@index([previousCategoryId])
 }
 
 model TransferLink {
@@ -192,7 +196,7 @@ model Transaction {
   description    String
   amount         Decimal         @db.Decimal(14, 2)
   type           TransactionType
-  categoryId     String
+  categoryId     String?
   accountId      String?
   cardId         String?
   invoiceId      String?
@@ -201,7 +205,7 @@ model Transaction {
   active         Boolean         @default(true)
   createdAt      DateTime        @default(now())
   user           User            @relation(fields: [userId], references: [id])
-  category       Category        @relation(fields: [categoryId], references: [id])
+  category       Category?       @relation(fields: [categoryId], references: [id])
   account        Account?        @relation(fields: [accountId], references: [id])
   card           Card?           @relation(fields: [cardId], references: [id])
   invoice            Invoice?            @relation(fields: [invoiceId], references: [id])

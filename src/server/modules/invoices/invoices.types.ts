@@ -37,7 +37,7 @@ export type InvoiceTransactionItem = {
     color: string;
     icon: string;
     kind: 'EXPENSE' | 'INCOME' | 'NON_EXPENSE';
-  };
+  } | null;
 };
 
 export type InvoicePaymentItem = {

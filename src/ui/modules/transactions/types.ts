@@ -16,7 +16,7 @@ export type TransactionItem = {
     icon: string;
     kind: 'EXPENSE' | 'INCOME' | 'NON_EXPENSE';
     systemKey: string | null;
-  };
+  } | null;
   account: {
     id: string;
     label: string;

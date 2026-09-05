@@ -44,9 +44,9 @@ function formatDueDate(isoDate: string): string {
   return `${day}/${month}/${year}`;
 }
 
-function formatDay(isoDate: string): string {
-  const [, , day] = isoDate.split('-');
-  return day;
+function formatDayMonth(isoDate: string): string {
+  const [, month, day] = isoDate.split('-');
+  return `${day}/${month}`;
 }
 
 function formatAmount(amount: number): string {
@@ -97,6 +97,8 @@ export function InvoiceDetailPanel({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [confirmLinkOpen, setConfirmLinkOpen] = useState(false);
+  const [unlinkPaymentId, setUnlinkPaymentId] = useState<string | null>(null);
+  const [unlinkBusy, setUnlinkBusy] = useState(false);
   const [editingDueDate, setEditingDueDate] = useState(false);
   const [dueDateDraft, setDueDateDraft] = useState('');
   const [dueDateBusy, setDueDateBusy] = useState(false);
@@ -258,6 +260,28 @@ export function InvoiceDetailPanel({
     }
   }
 
+  async function handleConfirmUnlink() {
+    if (!unlinkPaymentId) {
+      return;
+    }
+    setUnlinkBusy(true);
+    try {
+      const next = await invoicesApi.unlinkPayment(invoiceId, unlinkPaymentId);
+      setDetail(next);
+      onLoaded?.(next);
+      setUnlinkPaymentId(null);
+      toast.success('Pagamento desvinculado.');
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível desvincular o pagamento.';
+      toast.error(message);
+    } finally {
+      setUnlinkBusy(false);
+    }
+  }
+
   async function handleSaveDueDate() {
     if (!dueDateDraft.trim()) {
       setDueDateError('Informe a data de vencimento.');
@@ -383,8 +407,50 @@ export function InvoiceDetailPanel({
               {linking ? 'Cancelar' : 'Vincular pagamento'}
             </button>
           </div>
+        ) : (detail.payments ?? []).length > 0 ? (
+          <p className="section__hint section__hint--actions">
+            Errou o débito? Remova o vínculo em Pagamentos abaixo.
+          </p>
         ) : null}
       </div>
+
+      <h3 className="section__title">Pagamentos vinculados</h3>
+      <p className="section__hint">
+        Débitos da conta que baixam o saldo desta fatura. Se vinculou o
+        lançamento errado, remova o vínculo — o débito volta à conta e o caixa
+        das compras é recalculado.
+      </p>
+      {(detail.payments ?? []).length === 0 ? (
+        <p className="page__empty">Nenhum pagamento vinculado ainda.</p>
+      ) : (
+        <ul className="tx-rows tx-rows--invoice">
+          {(detail.payments ?? []).map((payment) => (
+            <li key={payment.id} className="tx-row tx-row--compact tx-row--with-action">
+              <span className="tx-row__date">
+                {formatDayMonth(payment.competenceDate)}
+              </span>
+              <span className="tx-row__description" title={payment.description}>
+                {payment.description}
+              </span>
+              <span className="tx-row__category">
+                {payment.account.label} · {payment.account.bank.name}
+              </span>
+              <span className="tx-row__amount tx-row__amount--expense">
+                {formatAmount(payment.amount)}
+              </span>
+              <button
+                type="button"
+                className="btn btn--secondary btn--compact tx-row__action"
+                disabled={unlinkBusy}
+                aria-label={`Remover vínculo de ${payment.description}`}
+                onClick={() => setUnlinkPaymentId(payment.id)}
+              >
+                Remover vínculo
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {linking ? (
         <div className="section invoice-link-panel">
@@ -419,7 +485,7 @@ export function InvoiceDetailPanel({
               {candidates.map((item) => {
                 const checked = selectedIds.includes(item.id);
                 return (
-                  <li key={item.id} className="tx-row tx-row--compact">
+                  <li key={item.id} className="tx-row tx-row--compact tx-row--pick">
                     <label className="tx-row__description">
                       <input
                         type="checkbox"
@@ -466,30 +532,6 @@ export function InvoiceDetailPanel({
         </div>
       ) : null}
 
-      <h3 className="section__title">Pagamentos vinculados</h3>
-      {(detail.payments ?? []).length === 0 ? (
-        <p className="page__empty">Nenhum pagamento vinculado ainda.</p>
-      ) : (
-        <ul className="tx-rows tx-rows--invoice">
-          {(detail.payments ?? []).map((payment) => (
-            <li key={payment.id} className="tx-row tx-row--compact">
-              <span className="tx-row__date">
-                {formatDay(payment.competenceDate)}
-              </span>
-              <span className="tx-row__description" title={payment.description}>
-                {payment.description}
-              </span>
-              <span className="tx-row__category">
-                {payment.account.label} · {payment.account.bank.name}
-              </span>
-              <span className="tx-row__amount tx-row__amount--expense">
-                {formatAmount(payment.amount)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
       <h3 className="section__title">Lançamentos da fatura</h3>
       {detail.transactions.length === 0 ? (
         <p className="page__empty">
@@ -499,11 +541,13 @@ export function InvoiceDetailPanel({
         <ul className="tx-rows tx-rows--invoice">
           {detail.transactions.map((item) => (
             <li key={item.id} className="tx-row tx-row--compact">
-              <span className="tx-row__date">{formatDay(item.competenceDate)}</span>
+              <span className="tx-row__date">{formatDayMonth(item.competenceDate)}</span>
               <span className="tx-row__description" title={item.description}>
                 {item.description}
               </span>
-              <span className="tx-row__category">{item.category.name}</span>
+              <span className="tx-row__category">
+                {item.category?.name ?? 'Sem categoria'}
+              </span>
               <span
                 className={`tx-row__amount${
                   item.amount < 0 ? ' tx-row__amount--expense' : ''
@@ -528,6 +572,20 @@ export function InvoiceDetailPanel({
           }
         }}
         onConfirm={() => void handleConfirmLink()}
+      />
+
+      <ConfirmModal
+        open={Boolean(unlinkPaymentId)}
+        title="Remover vínculo do pagamento"
+        description="Remover o vínculo deste débito com a fatura? Ele volta a ser despesa da conta e o caixa das compras é recalculado."
+        confirmLabel="Remover vínculo"
+        busy={unlinkBusy}
+        onCancel={() => {
+          if (!unlinkBusy) {
+            setUnlinkPaymentId(null);
+          }
+        }}
+        onConfirm={() => void handleConfirmUnlink()}
       />
     </section>
   );

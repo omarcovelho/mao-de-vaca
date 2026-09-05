@@ -82,8 +82,13 @@ export class ReportsService {
     ]);
 
     const leafTotals = new Map<string, number>();
+    let uncategorizedTotal = 0;
     for (const row of rows) {
       const amount = Math.abs(Number(row.amount));
+      if (!row.categoryId) {
+        uncategorizedTotal += amount;
+        continue;
+      }
       leafTotals.set(
         row.categoryId,
         (leafTotals.get(row.categoryId) ?? 0) + amount,
@@ -123,9 +128,10 @@ export class ReportsService {
       }
     }
 
-    const expenseTotal = [...byId.values()]
+    const categorizedRootTotal = [...byId.values()]
       .filter((node) => !node.parentId)
       .reduce((sum, node) => sum + node.total, 0);
+    const expenseTotal = categorizedRootTotal + uncategorizedTotal;
 
     const buildNode = (categoryId: string): ByCategoryItem | null => {
       const node = byId.get(categoryId);
@@ -154,8 +160,24 @@ export class ReportsService {
     const items = categories
       .filter((category) => category.parentId === null)
       .map((category) => buildNode(category.id))
-      .filter((item): item is ByCategoryItem => item !== null)
-      .sort((a, b) => b.total - a.total);
+      .filter((item): item is ByCategoryItem => item !== null);
+
+    if (uncategorizedTotal > 0) {
+      items.push({
+        categoryId: null,
+        name: 'Sem categoria',
+        color: '#A0AEC0',
+        icon: 'ellipsis',
+        total: roundMoney(uncategorizedTotal),
+        percent:
+          expenseTotal === 0
+            ? 0
+            : roundMoney((uncategorizedTotal / expenseTotal) * 100),
+        children: [],
+      });
+    }
+
+    items.sort((a, b) => b.total - a.total);
 
     return { regime, from, to, items };
   }
@@ -230,7 +252,10 @@ export class ReportsService {
       userId,
       active: true,
       type: { in: [TransactionType.EXPENSE, TransactionType.INCOME] },
-      category: { kind: { not: 'NON_EXPENSE' } },
+      OR: [
+        { categoryId: null },
+        { category: { kind: { not: 'NON_EXPENSE' } } },
+      ],
       [dateField]: {
         gte: new Date(from),
         lte: new Date(to),

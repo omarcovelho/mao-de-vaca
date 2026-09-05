@@ -47,7 +47,7 @@ Consequência importante e desejada: se o pagamento de uma fatura ainda não foi
 Unidade básica do sistema. Cada lançamento possui:
 - uma **data de competência** (quando o gasto aconteceu economicamente);
 - uma **data de caixa** (quando o dinheiro sai/saiu), quando aplicável;
-- uma descrição, um valor e uma **Categoria** cadastrada (ver §3.6; o nome chega pré-atribuído no CSV por ferramenta externa);
+- uma descrição, um valor e, **opcionalmente**, uma **categoria** folha cadastrada (ver §3.6; o nome chega pré-atribuído no CSV por ferramenta externa; ausência = “sem categoria”, ainda contabilizada como despesa/receita);
 - a identificação de sua **origem** — uma **Conta** ou **Cartão** cadastrado (ver §3.4 e §3.5);
 - um **tipo** (ver 3.7).
 
@@ -254,6 +254,7 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RF-10** — Faturas pertencem a um **Cartão** cadastrado (mês de referência, vencimento).
 - **RF-11** — O saldo e o status (em aberto, parcialmente paga, quitada) da fatura são derivados de suas compras, estornos e pagamentos vinculados.
 - **RF-12** — O usuário vincula manualmente um ou mais pagamentos a uma fatura; o débito ocorre em **Conta** cadastrada e a fatura pertence a **Cartão** cadastrado, suportando pagamento parcial e débito de instituição distinta do cartão; o lançamento recebe automaticamente a categoria **Pagamento de fatura**.
+- **RF-12a** — O usuário pode **desvincular** um pagamento de uma fatura; o débito volta a ser despesa (ou receita) de conta; a categoria anterior é restaurada se a folha ainda existir e estiver ativa, senão o lançamento fica **sem categoria** (`categoryId` null); o caixa das compras da fatura é recalculado (sem pagamentos restantes → `cashDate` null).
 - **RF-13** — Pagamentos de fatura e investimentos são registrados como transferências e não entram em nenhum total de gasto ou de receita.
 - **RF-14** — Estornos são registrados como lançamentos de sinal oposto, na fatura em que apareceram, e podem ser vinculados manualmente a uma compra-pai.
 
@@ -265,7 +266,7 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 ### 5.6 Visualização
 - **RF-18** — A interface possui um **toggle de regime** (competência ↔ caixa) que afeta toda a visualização.
 - **RF-19** — O sistema exibe **indicadores do período**: total de gastos, total de receitas e saldo.
-- **RF-20** — O sistema exibe a **quebra de gastos por categoria**, com percentual do total.
+- **RF-20** — O sistema exibe a **quebra de gastos por categoria**, com percentual do total; despesas **sem categoria** entram no total e aparecem como fatia sintética “Sem categoria” (não é um cadastro de categoria).
 - **RF-21** — O sistema exibe a **evolução mensal** dos gastos ao longo do tempo.
 - **RF-22** — O sistema exibe uma **tabela de lançamentos filtrável** por período, categoria e origem (conta ou cartão).
 
@@ -277,8 +278,8 @@ No MVP, porém, o sistema opera com **um único usuário fixo**, provisionado na
 - **RN-09** — Conta e cartão desativados não aparecem para nova importação, mas lançamentos históricos permanecem.
 - **RN-10** — Fatura só pode existir vinculada a cartão cadastrado; não há fatura órfã de cartão.
 - **RN-11** — Categoria com lançamentos vinculados não é removida fisicamente; apenas desativada (`active: false`).
-- **RN-12** — Toda importação só persiste após resolver 100% das categorias do lote (mapeamento ou criação na pré-visualização).
-- **RN-13** — Categorias desativadas não aparecem em novos mapeamentos; lançamentos históricos permanecem.
+- **RN-12** — Toda importação só persiste após resolver 100% das **categorias nomeadas** do lote (mapeamento ou criação na pré-visualização). Um lançamento **pode** existir sem categoria (`categoryId` null) fora desse fluxo (ex.: após desvincular pagamento cuja folha anterior foi desativada).
+- **RN-13** — Categorias desativadas não aparecem em novos mapeamentos; lançamentos históricos permanecem (podem ficar sem categoria se a folha for desativada e o vínculo anterior for desfeito).
 - **RN-01** — Saldo = receitas − despesas. Transferências não afetam o total de gasto nem o de receita.
 - **RN-02** — O pagamento de fatura nunca é contabilizado como despesa; a despesa já foi reconhecida nas compras da fatura. Isso impede contagem duplicada.
 - **RN-03** — A compra-pai nunca é contabilizada; apenas as parcelas entram nas somas.
