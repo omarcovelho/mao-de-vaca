@@ -2435,6 +2435,31 @@ button.tx-row__category:hover:not(:disabled) .tx-category-chip {
   font-size: 0.875rem;
 }
 
+.searchable-select__footer-action {
+  flex-shrink: 0;
+  width: calc(100% + 1rem);
+  margin: 0.15rem -0.5rem -0.5rem;
+  padding: 0.65rem 0.9rem;
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.searchable-select__footer-action:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.searchable-select__footer-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .form-stack .searchable-select__trigger,
 .import-field .searchable-select__trigger {
   font: inherit;

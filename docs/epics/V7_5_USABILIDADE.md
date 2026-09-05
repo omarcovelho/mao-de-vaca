@@ -1,7 +1,7 @@
 # V7.5 — Usabilidade e reversibilidade
 
 **Branch:** `feature/v7-5-usabilidade`  
-**Status:** In progress (slice A done)  
+**Status:** In progress (slices A + C done)  
 **Roadmap:** [MVP_EPIC_ROADMAP.md](../MVP_EPIC_ROADMAP.md)
 
 ## Resultado
@@ -124,11 +124,11 @@ Rotas novas ou comportamento novo; o restante permanece.
 
 - [x] A: DELETE pagamento + `cashDate` null sem pagamentos + UI Desvincular + testes HTTP
 - [ ] B: Toggle inativos + Reativar nas quatro telas + Vitest
-- [ ] C: Nova fatura em `/importar` + Vitest
+- [x] C: Nova fatura em `/importar` (UI; validação lint + build — Vitest UI removido)
 - [ ] D: `cardId` / `q` / categoria pai + filtros na UI + testes
 - [ ] E: marcador “sem caixa”; `GET /api/invoices`; home com mês + faturas abertas
 - [ ] F: unlink de transferência restaura a outra perna sem copiar categoria + testes
-- [x] PROJECT_DEFINITION + ARCHITECTURE atualizados no mesmo PR de código (slice A)
+- [x] PROJECT_DEFINITION + ARCHITECTURE atualizados no mesmo PR de código (slice A; RF-02c já cobre criação na hora)
 - [x] Copy PT; suíte Jest + Vitest verde (slice A)
 
 ## Notas

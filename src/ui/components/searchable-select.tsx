@@ -25,6 +25,11 @@ type SearchableSelectProps = {
   emptyLabel?: string;
   'aria-label'?: string;
   className?: string;
+  footerAction?: {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+  };
 };
 
 function normalize(text: string): string {
@@ -53,6 +58,7 @@ export function SearchableSelect({
   emptyLabel = 'Nenhuma',
   'aria-label': ariaLabel,
   className,
+  footerAction,
 }: SearchableSelectProps) {
   const generatedId = useId();
   const listboxId = `${generatedId}-listbox`;
@@ -227,6 +233,19 @@ export function SearchableSelect({
               ))}
             </ul>
           )}
+          {footerAction ? (
+            <button
+              type="button"
+              className="searchable-select__footer-action"
+              disabled={footerAction.disabled}
+              onClick={() => {
+                close();
+                footerAction.onClick();
+              }}
+            >
+              {footerAction.label}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
