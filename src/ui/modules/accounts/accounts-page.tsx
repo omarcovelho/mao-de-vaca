@@ -1,16 +1,15 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ConfirmModal } from '../../components/confirm-modal';
 import { FormModal } from '../../components/form-modal';
-import { AccountOriginIcon } from '../../components/origin-icon';
 import { PageHeader } from '../../components/page-header';
 import { useToast } from '../../components/toast';
-import { TrashGlyph } from '../categories/category-icons';
 import * as accountsApi from './api';
 import { BankFields } from './bank-fields';
 import { OnboardingContinue } from './onboarding-continue';
 import { OnboardingFinalizeButton } from './onboarding-finalize-button';
 import { OnboardingOriginsList } from './onboarding-origins-list';
 import { OnboardingSetupHeader } from './onboarding-setup-header';
+import { OriginAddCard, OriginCard, OriginCards } from './origin-card';
 import { useSetupStatus } from './setup-status-context';
 import type { Origin } from './types';
 
@@ -175,18 +174,6 @@ export function AccountsPage() {
       <PageHeader
         title="Contas"
         subtitle="Contas bancárias de movimentação"
-        trailing={
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => {
-              setError(null);
-              setShowForm(true);
-            }}
-          >
-            Adicionar conta
-          </button>
-        }
       />
 
       {error && !showForm ? (
@@ -197,52 +184,24 @@ export function AccountsPage() {
 
       {loading ? (
         <p className="page__empty">Carregando…</p>
-      ) : items.length === 0 ? (
-        <div className="surface-panel surface-panel--empty">
-          <p className="page__empty" style={{ margin: 0 }}>
-            Nenhuma conta cadastrada ainda.
-          </p>
-          <button
-            type="button"
-            className="btn btn--primary btn--sm"
+      ) : (
+        <OriginCards>
+          {items.map((item) => (
+            <OriginCard
+              key={item.id}
+              item={item}
+              kind="account"
+              onDeactivate={setDeactivateId}
+            />
+          ))}
+          <OriginAddCard
+            label="Nova conta"
             onClick={() => {
               setError(null);
               setShowForm(true);
             }}
-          >
-            Adicionar conta
-          </button>
-        </div>
-      ) : (
-        <div className="surface-panel">
-          <ul className="list-rows">
-            {items.map((item) => (
-              <li key={item.id} className="list-row origin-row">
-                <div className="origin-row__identity">
-                  <span className="origin-row__icon" aria-hidden>
-                    <AccountOriginIcon />
-                  </span>
-                  <div className="list-row__main">
-                    <div className="list-row__title-row">
-                      <span className="list-row__title">{item.label}</span>
-                      <span className="bank-pill">{item.bank.name}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="list-row__actions">
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--icon btn--icon-danger"
-                    aria-label={`Desativar ${item.label}`}
-                    onClick={() => setDeactivateId(item.id)}
-                  >
-                    <TrashGlyph />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+          />
+        </OriginCards>
       )}
 
       <FormModal

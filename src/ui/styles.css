@@ -275,6 +275,199 @@ a {
   padding-top: 0.45rem;
 }
 
+.origin-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.85rem;
+}
+
+.origin-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 8.5rem;
+  padding: 1rem 1.05rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.origin-card__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
+  padding-right: 2rem;
+}
+
+.origin-card__main--button {
+  cursor: pointer;
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.origin-card__main--button:hover .origin-card__title {
+  color: var(--accent);
+}
+
+.origin-card__main--button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.origin-card__icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-muted));
+  color: var(--accent);
+  flex-shrink: 0;
+  font-size: 1.35rem;
+  line-height: 0;
+}
+
+.origin-card__icon svg {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
+.origin-card__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.origin-card__title {
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.origin-card__deactivate {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.55rem;
+}
+
+.origin-card--add {
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 8.5rem;
+  padding: 1rem 1.05rem;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.origin-card--add:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.origin-card--add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.origin-card__add-icon {
+  display: grid;
+  place-items: center;
+  font-size: 1.75rem;
+  line-height: 0;
+}
+
+.origin-card__add-icon svg {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
+.origin-card__add-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.invoice-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.85rem;
+}
+
+.invoice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 1rem 1.05rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.invoice-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--surface-hover, var(--surface-muted));
+}
+
+.invoice-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.invoice-card__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.invoice-card__title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.invoice-card__meta {
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+
+.invoice-card__value {
+  margin-top: auto;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+}
+
+.invoice-card__value--expense {
+  color: var(--expense);
+}
+
 .panel__eyebrow {
   margin: 0 0 0.35rem;
   font-size: 0.75rem;
